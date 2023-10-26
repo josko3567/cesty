@@ -1,0 +1,10 @@
+/target/debug/*
+/target/*.*
+!/target/debug/examples
+!/target/debug/.cesty.yaml
+/local
+TODO.md
+develop.md
+.obsidian
+.vscode
+.VSCodeCounter

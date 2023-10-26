@@ -1,0 +1,41 @@
+# Default values:
+cesty:
+  # flags: 
+  metadata:
+    use: true
+    output: ".cesty.metadata"
+  userdata:
+    use: false
+    output: "cesty.data"
+
+# By default "gcc" is the compiler.
+# Flags
+compiler:
+  name: clang
+  flags: >
+    -fblocks -std=c11 -Wall 
+     -Wextra -Wpedantic
+     -Wformat=2 -Wno-unused-parameter 
+     -Wshadow -Wwrite-strings 
+     -Wstrict-prototypes     
+     -Wold-style-definition 
+     -Wredundant-decls -Wnested-externs
+     -Wmissing-include-dirs -pipe 
+     -Wno-unused-command-line-argument
+  libraries: >
+    -lm -lncursesw -lBlocksRuntime
+     ./ext/viwerr/viwerr.a
+     ./ext/PDCurses/wincon/pdcurses.a
+
+recipe: 
+  - name: src
+    run:
+      - path: /home/josko-k/nonstd/asigraph/src/agcont.c
+    force: false 
+
+  - name: all
+    run: 
+      # - path: "./examples/lib_1/src/foo.c"
+      - path: "examples/lib_1/src/*.c"
+        recurse: false
+    force: true
