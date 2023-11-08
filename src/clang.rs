@@ -1,10 +1,9 @@
 use crate::{
-    error::ErrorGroup, 
+    error::{ErrorGroup, ErrorPosition}, 
     lister::ListerFile
 };
 
-use std::{
-    error::Error, 
+use std::{ 
     fmt::Display, 
     ffi::{c_void, CString, CStr}, 
     ptr::{null_mut, addr_of}, 
@@ -12,18 +11,18 @@ use std::{
 };
 
 use clang_sys::*;
-use indoc::indoc;
+use indoc::formatdoc;
 use colored::Colorize;
 
 #[repr(u8)]
 #[derive(Clone, Debug)]
-pub enum ClangError {
-    IndexInitFailed,
-    CStringConversionError(String),
-    TranslationUnitInitFailed(String)
+pub enum Error {
+    IndexInitFailed(ErrorPosition),
+    CStringConversionError(ErrorPosition, String),
+    TranslationUnitInitFailed(ErrorPosition, String)
 }
 
-impl ClangError {
+impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
@@ -39,50 +38,47 @@ impl ClangError {
     
 }
 
-impl Display for ClangError {
+impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
-            Self::IndexInitFailed => {
-                format!( indoc!{"
-                Error! 
-                    clang_createIndex() returned NULL, aka. clang failed
-                    to initialize!.
-                "})
-                .red()},
-            Self::TranslationUnitInitFailed(str)=> {
-                format!( indoc!{"
-                Error! 
-                    clang_parseTranslationUnits() returned NULL, aka. 
-                    clang failed to translate the file, probably
-                    because:
-                        File: {}
-                    Does not contain valid C.
-                "}, 
-                    str.bold().red())
-                .red()}
-            Self::CStringConversionError(str)=> {
-                format!( indoc!{"
-                Error! 
-                    Was unable to initilaize a CString from this string:
-                        String: {}
-                "}, 
-                    str.bold().red())
-                .red()}
+            Self::IndexInitFailed(pos) => {
+                fmtperr!(pos,
+                "Failed to initialize clang engine!",
+                "
+                   {} failed with NULL. 
+                ",
+                    fmterr_func!(clang_createIndex())
+                )}
+            Self::TranslationUnitInitFailed(pos, str)=> {
+                fmtperr!(pos,
+                "Failed to parse file!",
+                "
+                    {} failed with NULL, are you sure the file...
+                        {}
+                    ...contains valid C?
+                ",
+                    fmterr_func!(clang_parseTranslationUnit()), fmterr_val!(str)
+                )}
+            Self::CStringConversionError(pos, str)=> {
+                fmtperr!(pos,
+                "String conversion failed!",
+                "
+                    Could not initialize a CString from the string...
+                        {}
+                ",
+                    fmterr_val!(str)
+                )}
         };
-        write!(f, "{}\n{message}", 
-            format!("From {}...", 
-                Path::new(file!())
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap()
-                .bold()
-            ).dimmed()
-        )
+        write!(f, "{message}")
     }
 }
 
-impl Error for ClangError {}
+impl std::error::Error for Error {}
 
+/// libclang's C engine in a structure.
+/// Initialized from `Clang::from_lister()`
+/// # Warning
+/// Must be manually closed with `Clang::close(&self)`
 pub struct Clang {
 
     pub index: *mut c_void,
@@ -96,8 +92,8 @@ impl Default for Clang {
     fn default() -> Self {
         Clang {
             index: null_mut(),
-            tu: null_mut(),
-            cur: CXCursor::default() 
+            tu:    null_mut(),
+            cur:   CXCursor::default() 
         }
     }
 
@@ -105,9 +101,10 @@ impl Default for Clang {
 
 impl Clang {
 
+    /// Initialize libclang Abstract Syntax Tree from a ListerFile.
     pub fn from_lister(
         file: &ListerFile
-    ) -> Result<Clang, ClangError> 
+    ) -> Result<Clang, Error> 
     { unsafe {
 
         let clang = clang_createIndex(
@@ -115,7 +112,7 @@ impl Clang {
         );
         
         if clang.is_null() {
-            return Err(ClangError::IndexInitFailed);
+            reterr!(Error::IndexInitFailed);
         }
         
         let raw_str: CString = match CString::new(
@@ -126,12 +123,12 @@ impl Clang {
         ) {
             Ok(val) => {val}
             Err(_) => {
-                return Err(ClangError::CStringConversionError(
+                reterr!(Error::CStringConversionError,
                     file.path
                         .clone()
                         .to_string_lossy()
                         .to_string()
-                ));
+                );
             }
         };
 
@@ -148,15 +145,14 @@ impl Clang {
             null_mut(),
             0,
             CXTranslationUnit_None
-            // | CXTranslationUnit_SkipFunctionBodies
         );
 
         if translation_unit.is_null() {
-            return Err(ClangError::TranslationUnitInitFailed(
+            reterr!(Error::TranslationUnitInitFailed,
                 file.path
                     .clone()
                     .to_string_lossy()
-                    .to_string())
+                    .to_string()
             );
         }
 
@@ -175,6 +171,7 @@ impl Clang {
 
     }}
 
+    /// Close up and deallocate the AST.
     pub fn close(&self) {
 
         if !self.tu.is_null() {

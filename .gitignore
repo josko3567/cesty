@@ -1,6 +1,6 @@
 /target/debug/*
 /target/*.*
-!/target/debug/examples
+!/target/debug/examples/lib_1
 !/target/debug/.cesty.yaml
 /local
 TODO.md

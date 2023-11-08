@@ -1,11 +1,10 @@
 use crate::{
     config::Config, 
     argument::Argument,
-    error::ErrorGroup
+    error::{ErrorGroup, ErrorPosition}
 };
 
 use std::{
-    error::Error, 
     fmt::Display, 
     ffi::OsString, 
     path::{Path, PathBuf}
@@ -14,19 +13,18 @@ use std::{
 use globwalk;
 use itertools::Itertools;
 use path_clean::PathClean;
-use indoc::indoc;
+use indoc::formatdoc;
 use colored::Colorize;
 
 // const ERROR_GROUP: u32 = 3;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
-pub enum ListerError {
-    NoFilesFound,
-    FilesystemOperationFail,
+pub enum Error {
+    NoFilesFound(ErrorPosition),
 }
 
-impl ListerError {
+impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
@@ -42,56 +40,29 @@ impl ListerError {
     
 }
 
-impl Display for ListerError {
+impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
-            Self::NoFilesFound => {
-                format!( indoc!{"
-                Error!
-                    No files given to parse.
-                    Not from the config file.
-                    Not from the command line arguments.
-                "})
-                .red()},
-            Self::FilesystemOperationFail => {
-                format!( indoc!{"
-                Error!
-                    Filesystem operation failed.
-                "})
-                .red()}
+            Self::NoFilesFound(pos) => {
+                fmtperr!(pos,
+                "No files to parse!",
+                "
+                    No files to parse from the config and command 
+                    line arguments.
+                "
+                )}
         };
-        write!(f, "{}\n{message}", 
-            format!("From {}...", 
-                Path::new(file!())
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap()
-                .bold()
-            ).dimmed()
-        )
+        write!(f, "{message}")
     }
 }
 
-impl Error for ListerError {}
+impl std::error::Error for Error {}
 
-#[derive(Hash, PartialEq, Clone)]
+#[derive(Hash, PartialEq, Clone, Default)]
 pub struct ListerFile {
 
     pub useconf: bool,
     pub path: OsString
-
-}
-
-impl ListerFile {
-
-    pub fn new() -> ListerFile {
-
-        ListerFile {
-            useconf: true,
-            path: OsString::from("")
-        }
-
-    }
 
 }
 
@@ -109,36 +80,38 @@ impl ListerFile {
 /// ```
 fn get_max_depth(fullpath: &PathBuf) -> Option<usize> {
 
-    let mut cln = fullpath.clone();
-    let mut solved = false;
+    let mut clone = fullpath.clone();
+    let mut pops: usize = 0;
 
     loop {
-        if !cln.pop() {break;}
-        if cln.is_dir() {
-            solved = true;
-            break;
-        }
+        if  clone.is_dir() {break}
+        if !clone.pop()    {return None}
+        pops += 1;
     }
 
-    if solved == false {
-
-        return None;
-
-    }
+    return Some(pops);
     
-    let str = cln.to_string_lossy().to_string();
-    let filestr: String = fullpath.to_string_lossy().to_string();
+    // let str = cln.to_string_lossy().to_string();
+    // let filestr: String = fullpath.to_string_lossy().to_string();
     // println!("{} + {}", str, &filestr[str.len()..filestr.len()]);
-    Some(filestr[str.len()..filestr.len()].matches(&['/', '\\']).count())
+    // Some(filestr[str.len()..filestr.len()].matches(&['/', '\\']).count())
 
 }
 
-
+/// Get apsolute path from either apsolute path or a relative path.
+/// 
+/// # Example
+/// ```
+/// // In directory /home/foo/bar
+/// assert_eq!(absolute_path(Path::new("/home/foo/bar/par")), PathBuf::new("/home/foo/bar/par"))
+/// assert_eq!(absolute_path(Path::new("par")), PathBuf::new("/home/foo/bar/par"))
+/// assert_eq!(absolute_path(Path::new("./../bar/.par")), PathBuf::new("/home/foo/bar/./../bar/.par"))
+/// ```
 #[allow(dead_code)]
 fn absolute_path(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
 
     let path = path.as_ref();
-
+    // Path::new("ea");
     let absolute_path = if path.is_absolute() {
 
         path.to_path_buf()
@@ -154,10 +127,70 @@ fn absolute_path(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
 
 }
 
-/// Get a vector of ListerFiles that contain full paths of files to be
-/// processed and what compiler options to use with them.
+// fn get_from_conf()
+
+/// Get a vector of [`ListerFile`] from the [`Config`] and [`Vec<Argument>`](`Argument`).
+/// # Example
+/// In *fs:*
+/// ```
+/// .
+/// └── home/
+///     └── foo/
+///         └── bar/
+///             ├── cesty.yaml
+///             └── src/
+///                 ├── fizz.c
+///                 ├── buzz.c
+///                 ├── foo.c
+///                 └── bar.c
+/// ```
+/// In *cesty.yaml:*
+/// ```yaml
+/// ...
+/// recipe: 
+///  - name: src
+///    run:
+///    - path: src/*.c
+///      recurse: false 
+/// ...
+/// ```
+/// *Test:*
+/// 
+/// ```rust
+/// let args: Vec<argument::Argument> = 
+/// vec![
+///     argument::Argument::Recipe("src"), 
+///     argument::Argument::Files(vec!["src/fizz.c", "src/buzz.c"])
+/// ];
+/// 
+/// let mut config = config::Config::new();
+/// config.from_file(config::find())?;
+/// 
+/// let list = lister::get_list(&config, &args)?;
+/// 
+/// // If the file is in conf & arg, useconf is true.
+/// let res = vec![
+///     ListerFile {
+///         useconf: true, 
+///         path: OsString::new("/home/foo/bar/src/fizz.c")}
+///     ListerFile {
+///         useconf: true, 
+///         path: OsString::new("/home/foo/bar/src/buzz.c")}
+///     ListerFile {
+///         useconf: true, 
+///         path: OsString::new("/home/foo/bar/src/foo.c")}
+///     ListerFile {
+///         useconf: true, 
+///         path: OsString::new("/home/foo/bar/src/bar.c")}
+/// ];
+/// 
+/// res.sort_by(|a,b| a.path.cmp(&b.path))
+/// list.sort_by(|a,b| a.path.cmp(&b.path))
+/// 
+/// assert_eq!(res, list);
+/// ```
 #[allow(non_snake_case)]
-pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, ListerError> {
+pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, Error> {
 
     let arg_files = match args
         .iter()
@@ -175,6 +208,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
         _ => None
     };
     
+
     let binding_recipe_empty = Argument::Recipe(String::from(""));
     let binding_string_empty = String::from("");
 
@@ -190,9 +224,13 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
     {
 
         Argument::Recipe(name) => {name},
-        _ => {&binding_string_empty}
+        _ => {
+            &binding_string_empty
+        }
 
     };
+
+
     
     let arg_recipe = if conf.recipe.is_some() { 
     conf.recipe
@@ -206,6 +244,25 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
         None
     };
 
+    if arg_recipe_name.is_empty() {
+        warn!(
+            "Did not find a recipe!",
+            "
+                No recipe was passed through cmd-line arguments.
+            "
+        );
+    } else if arg_recipe.is_none() {
+        warn!(
+            "Did not find a recipe!",
+            "
+                No recipe with the name...
+                  {}
+                ... was found.
+            ",
+                fmterr_val!(arg_recipe_name)
+        );
+    }
+
     let mut files = Vec::<ListerFile>::new();
 
     if arg_recipe.is_some() {
@@ -218,9 +275,12 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
             let symlink = run.symlinks.is_some_and(|x|x);
 
             // Fullpath of the recipe.run[?].path variable
-            let mut fullpath= if Path::new(&run.path).is_absolute() {
+            let mut fullpath= if Path::new(&run.path).is_absolute() 
+            {
                 PathBuf::from(&run.path)
-            } else {
+            } 
+            else 
+            {
                 let mut confpath = PathBuf::from(&conf.path);
 
                 // Removes .cesty.{conf,yaml,yml}
@@ -232,18 +292,16 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                 match Path::new(&confpath).is_absolute() {
                     true => {confpath}
                     _ => { 
-                        eprintln!("{} {}", 
-                            "From lister.rs\n".dimmed(),
-                            format!( indoc!{"
-                            Warning! 
-                                Failed to extract full path from:
-                                    Path: {}
-                                Reached fullpath value of:
-                                    Fullpath: {}
-                            "}, 
-                                &run.path, 
-                                confpath.display()
-                            ).yellow()
+                        warn!(
+                        "Failed to extract absolute path!",
+                        "
+                            Could not extract a absolute path from...
+                                {}
+                            ...the path that was extracted is...
+                                {}
+                        ",
+                            fmterr_val!(run.path), 
+                            fmterr_val!(confpath.display())
                         );
                         break;
                     }
@@ -252,10 +310,10 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
             
             // Check if path points to file... 
             if fullpath.is_file() {
-                files.append(&mut vec![ListerFile{
+                files.push(ListerFile{
                     useconf: true,
                     path: fullpath.as_os_str().to_os_string()
-                }]);
+                });
                 continue;
             }
 
@@ -271,18 +329,16 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                 match get_max_depth(&fullpath) {
                     Some(depth) => {depth}
                     _ => {
-                        eprintln!("{} {}", 
-                            "From lister.rs\n".dimmed(),
-                            format!( indoc!{"
-                            Warning! 
-                                Failed to extract max depth from:
-                                    Path: {}
-                                    Fullpath: {}
-                            "}, 
-                                &run.path.to_string().underline(), 
-                                fullpath.to_string_lossy()
-                                    .to_string().underline()
-                            ).yellow()
+                        warn!(
+                        "Failed to extract max depth!",
+                        "
+                            Could not extract the maximum depth of file...
+                                {}
+                            ...with fullpath of...
+                                {}
+                        ",
+                            fmterr_val!(run.path), 
+                            fmterr_val!(fullpath.to_string_lossy().to_string())
                         );
                         continue;
                     }
@@ -298,22 +354,21 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                 .follow_links(symlink)
                 .build()
             {
-                Ok(ret) => {ret}
-                Err(_err) => {
-                    eprintln!("{} {}", 
-                        "From lister.rs\n".dimmed(),
-                        format!( indoc!{"
-                        Warning! 
-                            Failed to open a file in:
-                                Path: {}
-                                Fullpath: {}
-                            Due to:
-                                Error: {}
-                        "}, 
-                            &run.path.to_string().underline(), 
-                            fullpath.display().to_string().underline(), 
-                            _err.to_string().red()
-                        ).yellow()
+                Ok(res) => {res}
+                Err(err) => {
+                    warn!(
+                    "Failed to extract max depth!",
+                    "
+                        Failed to open file...
+                            {}
+                        ...with fullpath of...
+                            {}
+                        ...because of GlobError...
+                            {}
+                    ",
+                        fmterr_val!(run.path),
+                        fmterr_val!(fullpath.display()),
+                        err.to_string().bold()
                     );
                     continue;
                 }   
@@ -321,29 +376,27 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
             }
             .for_each(|x| { match x {
                 Ok(res) => { 
-                // println!("{:?}", res.path().as_os_str().to_os_string());
                     if res.path().is_file() {
-                        files.append(&mut vec![ListerFile{
+                        files.push(ListerFile{
                             useconf: true,
                             path: res.path().as_os_str().to_os_string()
-                        }])
+                        })
                     }
                 },
-                Err(_err) => {
-                    eprintln!("{} {}", 
-                        "From lister.rs\n".dimmed(),
-                        format!( indoc!{"
-                        Warning! 
-                            Failed to open a file in:
-                                Path: {}
-                                Fullpath: {}
-                            Due to:
-                                Error: {}
-                        "}, 
-                            &run.path.to_string().underline(), 
-                            fullpath.display().to_string().underline(), 
-                            _err.to_string().red()
-                        ).yellow()
+                Err(err) => {
+                    warn!(
+                    "Failed to extract max depth!",
+                    "
+                        Failed to open file...
+                            {}
+                        ...with fullpath of...
+                            {}
+                        ...because of Error...
+                            {}
+                    ",
+                        fmterr_val!(run.path),
+                        fmterr_val!(fullpath.display()),
+                        err.to_string().bold()
                     );
                 }
             }});
@@ -361,24 +414,23 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                 Ok(ret) => {
 
                     if Path::new(&ret).is_file() {                       
-                        files.append(&mut vec![ListerFile {
+                        files.push(ListerFile {
                             useconf: false,
                             path: OsString::from(ret)
-                        }]);
+                        });
                     } else {
-                        eprintln!("{} {}",
-                            "From lister.rs\n".dimmed(),
-                            format!( indoc!{"
-                            Warning! 
-                                Argument file:
-                                    Path: \"{}\"
-                                    Fullpath: \"{}\"
-                                Does not exist!
-                            "}, 
-                                &str.underline(), 
-                                ret.display().to_string().underline()
-                            ).yellow()
-                        );
+                        warn!(
+                        "Cannot find file!",
+                        "
+                            File given via. cmd-line arguments...
+                                {}
+                            ...with fullpath of...
+                                {}
+                            Does not exist!
+                        ",
+                            fmterr_val!(str),
+                            fmterr_val!(ret.display())
+                        )
                     }
 
                 }
@@ -392,7 +444,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
 
     if files.len() == 0{
 
-        Err(ListerError::NoFilesFound)
+        reterr!(Error::NoFilesFound)
 
     } else {
 

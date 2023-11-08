@@ -1,6 +1,6 @@
 use crate::{
     argument::{Argument, Override}, 
-    error::ErrorGroup
+    error::{ErrorGroup, ErrorPosition}
 };
 
 use serde::Deserialize;
@@ -10,19 +10,77 @@ use serde_yaml;
 use std::{
     fs::File, 
     path::Path,
-    error::Error,
     fmt::Display
 };
 
-use indoc::indoc;
+use indoc::formatdoc;
 use colored::Colorize;
 
-const ERROR_GROUP: u32 = 2;
+#[repr(u8)]
+#[derive(Debug, Clone)]
+pub enum Error {
+    NoConfigFile(ErrorPosition),
+    CannotOpenConfig(ErrorPosition, String),
+    SerdeError(ErrorPosition, String)
+}
+
+impl Error {
+
+    pub fn code(&self) -> String {
+        return format!("E;{:X}:{:X}", 
+            ErrorGroup::from(
+                Path::new(file!())
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap()
+            ) as u8, 
+            unsafe { *(self as *const Self as *const u8) }
+        );
+    }
+    
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match &self {
+            Self::NoConfigFile(pos) => {
+                fmtwarnp!(pos,
+                "No config file was found.",
+                "
+                    Proceeding with argument passed files.
+                ")}
+            Self::CannotOpenConfig(pos, str) => {
+                fmtperr!(pos,
+                "Cannot open file.",
+                "
+                    Config file exists, but std::io functionality cannot open
+                    it for the following reason...
+                        {}
+                ",
+                    str.bold()
+                )}
+            Self::SerdeError(pos, str) => {
+                fmtperr!(pos,
+                "Cannot parse the config file.",
+                "
+                    Serde failed to parse cesty config file for the following
+                    reason...
+                        {}
+                ",
+                    str.bold()
+                )}
+        };
+        write!(f, "{message}")
+    }
+}
+
+impl std::error::Error for Error {}
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ConfigCestyData {
     #[serde(rename = "use")] 
     pub active: Option<bool>,
+    #[serde(alias = "input")]
     pub output: Option<String>
 }
 
@@ -31,7 +89,7 @@ pub struct ConfigCesty {
     
     pub flags:     Option<String>,
     pub metadata:  Option<ConfigCestyData>,
-    pub userdata:  Option<ConfigCestyData>
+    pub dataset:   Option<ConfigCestyData>
 
 }
 
@@ -74,69 +132,6 @@ pub struct Config {
 
 }
 
-#[repr(u8)]
-#[derive(Debug, Clone)]
-pub enum ConfigError {
-    NoConfigFile,
-    CannotOpenConfig,
-    SerdeError
-}
-
-impl ConfigError {
-
-    pub fn code(&self) -> String {
-        return format!("E;{:X}:{:X}", 
-            ErrorGroup::from(
-                Path::new(file!())
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap()
-            ) as u8, 
-            unsafe { *(self as *const Self as *const u8) }
-        );
-    }
-    
-}
-
-impl Display for ConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let message = match &self {
-            Self::NoConfigFile => {
-                format!( indoc!{"
-                Message: 
-                    Config file was not found.
-                    Proceeding with argument passed files only.
-                "})
-                .normal().dimmed()},
-            Self::CannotOpenConfig => {
-                format!( indoc!{"
-                Error! 
-                    Config file exists but IO functionality cannot open it.
-                "})
-                .red()},
-            Self::SerdeError => {
-                format!( indoc!{"
-                Error! 
-                    Serde had trouble parsing the config file.
-                    Check if the file is properly formatted.
-                    If you have recipes with no names the parser will fail.
-                "})
-                .red()}
-        };
-        write!(f, "{}\n{message}", 
-            format!("From {}...", 
-                Path::new(file!())
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap()
-                .bold()
-            ).dimmed()
-        )
-    }
-}
-
-impl Error for ConfigError {}
-
 /// Find the first occurence of .cesty.{conf, yaml, yml} from the current file
 /// all the way to root (C:\ or /).
 /// 
@@ -151,22 +146,26 @@ impl Error for ConfigError {}
 /// // in that folder.
 /// assert_eq!(find_config(), "/home/foobar/bar/.cesty.yaml");
 /// ```
-pub fn find_config() -> Option<String> {
+pub fn find() -> Option<String> {
  
     let names = [
 
-        ".cesty.conf",
-        ".cesty.yaml",
-        ".cesty.yml"
+        "cesty.conf",
+        "cesty.yaml",
+        "cesty.yml"
 
     ].into_iter();
 
     for name in names {
 
-        let Ok(mut current_full_path) = std::env::current_dir() else {
-            // Never happens.
-            continue;
+        let mut current_full_path = 
+        match std::env::current_dir() {
+            Ok(res) => {res}
+            Err(_) => {
+                return None
+            }
         };
+
 
         loop {
 
@@ -179,12 +178,11 @@ pub fn find_config() -> Option<String> {
 
             if Path::new(&test_path).is_file() {
                 
-                // eprintln!("{}", testpath);
                 return Some(test_path);
                 
             }
 
-            if !current_full_path.pop() {break;}
+            if !current_full_path.pop() {break}
 
         }
 
@@ -212,7 +210,7 @@ impl Config {
         let configCestyEmpty: ConfigCesty = ConfigCesty { 
             flags: None, 
             metadata: Some(configCestyMetaDataEmpty), 
-            userdata: Some(configCestyUserDataEmpty) 
+            dataset: Some(configCestyUserDataEmpty) 
         };
 
         let configCompilerEmpty: ConfigCompiler = ConfigCompiler { 
@@ -232,35 +230,41 @@ impl Config {
 
     }
 
-    pub fn from_file(&mut self, file: Option<String>) -> Result<(), ConfigError> {
 
-
-        // serde_yaml::Error::
+    /// Read config file from optional string.
+    /// Used in tandem with [`config::find()`](find())
+    /// # Example
+    /// ```
+    /// let mut conf: Config = Config::new();
+    /// match conf.from_file(config::find()) {
+    ///     Err(err) => {eprintln!("{err}"); return Err(err.code())}
+    ///     _ => {}
+    /// }
+    /// ```
+    pub fn from_file(&mut self, file: Option<String>) -> Result<(), Error> {
 
         let filepure = match file {
             Some(pure) => {pure}
-            None => {return Err(ConfigError::NoConfigFile)}
+            None => {reterr!(Error::NoConfigFile)}
         };
 
-
-        let Ok(stream) = File::options()
+        let stream = match File::options()
             .truncate(false)
             .append(false)
             .write(false)
             .read(true)
             .open(&filepure)
-        else {
-            return Err(ConfigError::CannotOpenConfig)
+        {
+            Ok(res) => {res}
+            Err(err) => {reterr!(Error::CannotOpenConfig, err.to_string())}
         };
 
         let parsed: Result<Config, serde_yaml::Error> = 
             serde_yaml::from_reader(stream);
         
         *self = match parsed {
-            Ok(pure) => {pure}
-            Err(_err) => {
-                return Err(ConfigError::SerdeError);
-            }
+            Ok(res) => {res}
+            Err(err) => {reterr!(Error::SerdeError, err.to_string())}
         };
 
         self.path = String::from(filepure);
@@ -284,7 +288,6 @@ impl Config {
                         }
                         None => {}
                     }
-                    // self.cesty;
                 },
                 Argument::Overrides(
                     Override::CompilerFlags(flags)

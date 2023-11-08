@@ -1,7 +1,14 @@
-[package]
+[package]   
 name = "cesty"
 version = "0.1.0"
 edition = "2021"
+license = "LPGL V2.1"
+license-file = "LICENSE"
+categories = ["command-line-utilities", "development-tools", "development-tools::testing"]
+keywords = ["cesty", "test", "testing", "tool", "cmd"]
+# default-run = "./target/debug/cesty"
+publish = false
+repository = "https://github.com/josko3567/cesty"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,3 +27,4 @@ lazy_static = "1.4"
 clang = "2.0"
 strum = "0.25"
 strum_macros = "0.25.3"
+strsim = "0.10.0"

@@ -1,34 +1,32 @@
 use crate::{
     error::ErrorGroup, 
+    error::ErrorPosition, 
     lister::ListerFile
 };
 
 use std::{
     fmt::Display,
-    error::Error,
+    // error::Error,
     collections::HashMap, 
     sync::Mutex,
-    ffi::{OsString, CString, CStr, c_uint, c_void}, 
-    ptr::{null, null_mut}, path::Path, fs
+    ffi::OsString, 
+    ptr::null_mut, path::Path,
 };
 
 use lazy_static::lazy_static;
 use colored::Colorize;
-use indoc::indoc;
+use indoc::formatdoc;
 use clang_sys::*;
 
 #[derive(Debug, Clone)]
-pub enum EnvironmentError {
+pub enum Error {
 
-    FileInPool(String),
-    CannotOpenFile(String),
-    NothingToExtract(String),
-    IndexInitFailed,
-    TranslationUnitInitFailed(String),
+    FileInPool(ErrorPosition, String),
+    CannotOpenFile(ErrorPosition, String, String),
 
 }
 
-impl EnvironmentError {
+impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
@@ -44,47 +42,32 @@ impl EnvironmentError {
     
 }
 
-impl Display for EnvironmentError {
+impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
-            Self::FileInPool(str) => {
-                format!( indoc!{"
-                Error! 
-                    File is inside the ENVIRONMENT_POOL!
-                        File: {}
-                "}, str.underline())
-                .red()},
-            Self::CannotOpenFile(str) => {
-                format!( indoc!{"
-                Error! 
-                    Cannot open file for reading:
-                        File: {}
-                "}, str.underline())
-                .red()},
-            Self::NothingToExtract(str) => {
-                format!( indoc!{"
-                Error! 
-                    Nothing was extracted from file:
-                        File: {}
-                "}, str.underline())
-                .red()},
-            Self::IndexInitFailed => {
-                format!( indoc!{"
-                Error! 
-                    clang_createIndex() returned NULL, aka. clang failed
-                    to initialize!.
-                "})
-                .red()},
-            Self::TranslationUnitInitFailed(str )=> {
-                format!( indoc!{"
-                Error! 
-                    clang_parseTranslationUnits() returned NULL, aka. 
-                    clang failed to translate the file, probably
-                    because:
-                        File: {}
-                    Does not contain valid .c
-                "}, str.bold().red())
-                .red()}
+            Self::FileInPool(pos, f) => {
+                fmtperr!(pos,
+                "File already processed!",
+                "
+                    File...
+                        {}
+                    is already inside the {}.
+                ",
+                    fmterr_val!(f),
+                    fmterr_name!(ENVIRONMENT_POOL)
+                )}
+            Self::CannotOpenFile(pos, f,err ) => {
+                fmtperr!(pos,
+                "Cannot open file!",
+                "
+                    Cannot open file...
+                        {}
+                    ... due to the following error...
+                        {}
+                ",
+                    fmterr_val!(f),
+                    err.bold()
+                )}
         };
         write!(f, "{}\n{message}", 
             format!("From {}...", 
@@ -98,7 +81,7 @@ impl Display for EnvironmentError {
     }
 }
 
-impl Error for EnvironmentError {}
+impl std::error::Error for Error {}
 
 pub struct Environment {
     
@@ -116,19 +99,19 @@ lazy_static!(
     /// which is a copy of the file without function bodies.
     #[allow(unused_variables)]
     #[allow(non_upper_case_globals)]
-    pub static ref ENVIRONMENT_POOL: Mutex<HashMap<&'static OsString, Environment>> = {
+    pub static ref ENVIRONMENT_POOL: Mutex<HashMap<OsString, Environment>> = {
         let a = HashMap::new();
         Mutex::new(a)
     };
 );
 
 
-pub(super) mod Offset {
+pub(super) mod offset {
     
     use std::{
         sync::Mutex,
-        ffi::{c_uint, CStr},
-        ptr::{null, null_mut}
+        ffi::c_uint,
+        ptr::null_mut
     };
     
     use lazy_static::lazy_static;
@@ -283,94 +266,70 @@ pub(super) mod Offset {
 
 impl Environment {
 
-    pub fn from_lister( 
+    pub fn from_lister_into_pool( 
 
         file: &ListerFile,
         cur: CXCursor
         
-    ) -> Result<Environment, EnvironmentError> 
-    { unsafe {
+    ) -> Result<(), Error> 
+    { 
 
-        // if ENVIRONMENT_POOL.lock().unwrap().contains_key(&file.path) {
-        //     return Err(EnvironmentError::FileInPool(
-        //         file.path.clone().to_string_lossy().to_string())
-        //     );
-        // }
+        if ENVIRONMENT_POOL.lock().unwrap().contains_key(&file.path) {
+            reterr!(Error::FileInPool,
+                file.path.clone().to_string_lossy().to_string()
+            );
+        }
         
-        // let filestr = 
-        // match fs::read_to_string(Path::new(&file.path)) {
-        //     Ok(str) => {
-        //         str
-        //     }
-        //     Err(_) => {
-        //         return Err(EnvironmentError::CannotOpenFile(
-        //             file.path.to_string_lossy().to_string()
-        //         ));
-        //     }
-        // };
-        
-        // let clang = clang_createIndex(
-        //     0, 0
-        // );
-        
-        // if clang.is_null() {
-        //     return Err(EnvironmentError::IndexInitFailed);
-        // }
-        
-        // let raw_str = CString::new(
-        //     file.path.clone()
-        //     .to_string_lossy()
-        //     .to_string()
-        // ).unwrap();
-
-        // let arg = CStr::from_bytes_with_nul("-std=gnu11\0".as_bytes()).unwrap();
-        // let argptr = arg.as_ptr();
-        // let translation_unit = 
-        // clang_parseTranslationUnit(
-        //     clang, 
-        //     raw_str.as_ptr(),
-        //     std::ptr::addr_of!(argptr),
-        //     1,
-        //     null_mut(),
-        //     0,
-        //     CXTranslationUnit_None
-        // );
-
-        // if translation_unit.is_null() {
-        //     return Err(EnvironmentError::NothingToExtract(file.path
-        //         .clone()
-        //         .to_string_lossy()
-        //         .to_string())
-        //     );
-        // }
-
-        Offset::stack(Offset::SOption::New, None);
-
-        // let cur = clang_getTranslationUnitCursor(tu);
+        let filestr = 
+        match std::fs::read_to_string(Path::new(&file.path)) {
+            Ok(str) => {
+                str
+            }
+            Err(err) => {
+                reterr!(Error::CannotOpenFile,
+                    file.path.to_string_lossy().to_string(),
+                    err.to_string()
+                );
+            }
+        };
+    
+        offset::stack(offset::SOption::New, None);
             
-        clang_visitChildren(
+        unsafe { clang_visitChildren(
             cur,
-            Offset::from_cursor,
+            offset::from_cursor,
             null_mut()
-        );
+        )};
 
-        let stack = Offset::stack(
-            Offset::SOption::PopAll, 
+        let mut stack = offset::stack(
+            offset::SOption::PopAll, 
             None
         ).unwrap();
 
+        stack.reverse();
 
-        stack.iter().for_each(|x| println!("{:?}", x));
+        let mut clean = filestr.clone();
+        
+        for offset in stack {
 
-        // clang_disposeTranslationUnit(translation_unit);
-        // drop(raw_str);
-    
-        // clang_disposeIndex(clang);
+            let range = (offset.0 as usize)..(offset.1 as usize);
+            clean.replace_range(range, ";");
 
-        Err(EnvironmentError::IndexInitFailed)
+        }
+
+        ENVIRONMENT_POOL.lock().unwrap().insert(file.path.clone(), Environment { 
+            full: filestr.to_owned(),
+            bodyclean: clean.to_owned()
+        });
+
+        // println!("{}", clean);
+        // stack.iter().for_each(|x| println!("{:?}", x));
+
+        Ok(())
+
         
 
 
-    }}
+    }
 
 }

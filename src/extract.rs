@@ -1,88 +1,15 @@
-use crate::{
-    lister::ListerFile,
-    error::ErrorGroup
-};
+use crate::lister::ListerFile;
 
 use std::{
-    ffi::{CString, CStr, c_uint, OsString, c_void},
-    ptr::{null, null_mut},
-    error::Error,
-    fmt::Display, path::Path
+    ffi::{CStr, c_uint, OsString},
+    ptr::null_mut,
 };
 
 use clang_sys::*;
-use indoc::indoc;
-use colored::Colorize;
+
 
 #[derive(Debug, Clone)]
-pub enum ExtractError {
-
-    NothingToExtract(String),
-    IndexInitFailed,
-    TranslationUnitInitFailed(String),
-
-}
-
-impl ExtractError {
-
-    pub fn code(&self) -> String {
-        return format!("E;{:X}:{:X}", 
-            ErrorGroup::from(
-                Path::new(file!())
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap()
-            ) as u8, 
-            unsafe { *(self as *const Self as *const u8) }
-        );
-    }
-    
-}
-
-impl Display for ExtractError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let message = match &self {
-            Self::NothingToExtract(str) => {
-                format!( indoc!{"
-                Error! 
-                    Nothing was extracted from file:
-                        {}
-                "}, str.underline())
-                .red()},
-            Self::IndexInitFailed => {
-                format!( indoc!{"
-                Error! 
-                    clang_createIndex() returned NULL, aka. clang failed
-                    to initialize!.
-                "})
-                .red()},
-            Self::TranslationUnitInitFailed(str )=> {
-                format!( indoc!{"
-                Error! 
-                    clang_parseTranslationUnits() returned NULL, aka. 
-                    clang failed to translate the file, probably
-                    because:
-                        {}
-                    Does not contain valid .c
-                "}, str.bold().red())
-                .red()}
-        };
-        write!(f, "{}\n{message}", 
-            format!("From {}...", 
-                Path::new(file!())
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap()
-                .bold()
-            ).dimmed()
-        )
-    }
-}
-
-impl Error for ExtractError {}
-
-#[derive(Debug, Clone)]
-enum ExtExtionOptions {
+enum EOptions {
 
     PopAll,
     Push,
@@ -110,24 +37,24 @@ pub struct Extract {
 }
 
 fn extract_stack(
-    option: ExtExtionOptions,
+    option: EOptions,
     input: Option<ExtractTest>
 ) -> Option<Vec<ExtractTest>> 
 { unsafe {
 
     static mut TESTS: Vec<ExtractTest> = vec![];
     match option {
-        ExtExtionOptions::PopAll => {
+        EOptions::PopAll => {
             let tmp = TESTS.to_vec();
             TESTS = vec![];
             return Some(tmp);
         },
-        ExtExtionOptions::Push => {
+        EOptions::Push => {
             _ = input.is_some_and(|x| {
                 TESTS.push(x); true
             });
         },
-        ExtExtionOptions::New => {
+        EOptions::New => {
             TESTS = vec![];
         }
     }
@@ -316,7 +243,7 @@ extern "C" fn extract_from_cursor(
     };
 
     extract_stack(
-        ExtExtionOptions::Push, 
+        EOptions::Push, 
         Some(ExtractTest {
             comment:  parsed_comments, 
             function: ccur_dname_str, 
@@ -337,29 +264,27 @@ impl Extract {
         file: &ListerFile,
         cur: CXCursor
         
-    ) -> Result<Extract, ExtractError> 
-    { unsafe{
+    ) -> Extract 
+    { 
     
-        extract_stack(ExtExtionOptions::New, None);
+        extract_stack(EOptions::New, None);
 
-        // let cur = clang_getTranslationUnitCursor(tu);
-        
-        clang_visitChildren(
+        unsafe{ clang_visitChildren(
             cur,
             extract_from_cursor,
             null_mut()
-        );
+        );}
 
-        Ok(Extract {
+        Extract {
             filepath: file.path.clone(),
             tests: match extract_stack(
-                ExtExtionOptions::PopAll, None) {
+                EOptions::PopAll, None) {
                     Some(ext) => {ext},
                     _ => {vec![]}
                 }
-        })
+        }
     
-    }}
+    }
 
     
 }
