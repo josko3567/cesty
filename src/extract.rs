@@ -6,7 +6,59 @@ use std::{
 };
 
 use clang_sys::*;
+use serde::Deserialize;
+use serde_yaml;
+use indoc::formatdoc;
+use std::path::Path;
+use colored::Colorize;
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct YAMLInfo {
+
+    pub standalone: Option<bool>,
+    pub warn: Option<bool>,
+    pub run: Option<bool>
+
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct YAMLTest {
+
+    pub name:   Option<String>,
+    pub input:  Option<String>,
+    pub code:   String,
+    pub expect: bool
+
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct YAML {
+    
+    pub info: Option<YAMLInfo>,
+    pub objects: Option<Vec<String>>,
+    pub execute: Option<Vec<String>>,
+    pub test: Option<Vec<YAMLTest>>,
+
+}
+
+#[derive(Clone, Default)]
+pub struct Test {
+    
+    pub yaml:     Vec<YAML>,
+    pub function: String,
+    pub returns:  String,
+    pub line:     u32,
+    pub column:   u32
+    
+}
+
+#[derive(Clone, Default)]
+pub struct Extract {
+    
+    pub filepath: OsString,
+    pub tests:    Vec<Test>
+    
+}
 
 #[derive(Debug, Clone)]
 enum EOptions {
@@ -17,32 +69,13 @@ enum EOptions {
     
 }
 
-#[derive(Clone, Default)]
-pub struct ExtractTest {
-
-    pub comment:  Vec<String>,
-    pub function: String,
-    pub returns:  String,
-    pub line:     u32,
-    pub column:   u32
-
-}
-
-#[derive(Clone, Default)]
-pub struct Extract {
-
-    pub filepath: OsString,
-    pub tests:    Vec<ExtractTest>
-
-}
-
-fn extract_stack(
+fn stack(
     option: EOptions,
-    input: Option<ExtractTest>
-) -> Option<Vec<ExtractTest>> 
+    input: Option<Test>
+) -> Option<Vec<Test>> 
 { unsafe {
 
-    static mut TESTS: Vec<ExtractTest> = vec![];
+    static mut TESTS: Vec<Test> = vec![];
     match option {
         EOptions::PopAll => {
             let tmp = TESTS.to_vec();
@@ -70,7 +103,7 @@ enum CommentType {
 
 }
 
-fn parse_comment(comment: String) -> Option<Vec<String>> {
+fn parse_comment(comment: String) -> Option<Vec<YAML>> {
 
     let lines: Vec<&str> = comment
         .split_once("#!cesty;")?
@@ -124,12 +157,18 @@ fn parse_comment(comment: String) -> Option<Vec<String>> {
             inyaml = true;
 
         }
+        else if 
+            line.len() < skip
+        {
+            return None;
+        }
         else if  // At the end of a yaml ...
-            line
-                .split_at(skip)
-                .1
-                .trim_start()
-                .starts_with("...")
+        // line.len() > skip 
+        line
+            .split_at(skip)
+            .1
+            .trim_start()
+            .starts_with("...")
         &&  inyaml == true
         {
             comments.push(comment);
@@ -153,7 +192,17 @@ fn parse_comment(comment: String) -> Option<Vec<String>> {
 
     }
 
-    Some(comments)
+    let mut yamls: Vec<YAML> = vec![];
+    for c in comments {
+        eprintln!("{}", c);
+        let r: YAML = match serde_yaml::from_str(c.as_str()){
+            Ok(res) => {res}
+            Err(err) => {warn!("", "{}", fmterr_val!(err));continue}
+        };
+        yamls.push(r);
+    }
+    Some(yamls)
+    // Some(comments)
 
 }
 
@@ -242,10 +291,10 @@ extern "C" fn extract_from_cursor(
         _ => {return CXChildVisit_Continue;}
     };
 
-    extract_stack(
+    stack(
         EOptions::Push, 
-        Some(ExtractTest {
-            comment:  parsed_comments, 
+        Some(Test {
+            yaml:  parsed_comments, 
             function: ccur_dname_str, 
             returns:  ccur_tyspell_str,
             line:     ccur_line, 
@@ -267,23 +316,24 @@ impl Extract {
     ) -> Extract 
     { 
     
-        extract_stack(EOptions::New, None);
+        stack(EOptions::New, None);
 
-        unsafe{ clang_visitChildren(
+        unsafe { 
+            clang_visitChildren(
             cur,
             extract_from_cursor,
             null_mut()
-        );}
+            );
+        }
 
         Extract {
             filepath: file.path.clone(),
-            tests: match extract_stack(
-                EOptions::PopAll, None) {
-                    Some(ext) => {ext},
-                    _ => {vec![]}
-                }
+            tests: match stack(EOptions::PopAll, None) {
+                Some(ext) => {ext},
+                _ => {vec![]}
+            }
         }
-    
+        
     }
 
     

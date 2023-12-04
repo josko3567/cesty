@@ -1,6 +1,6 @@
 use crate::{
-    error::ErrorGroup, 
     error::ErrorPosition, 
+    filegroup::FileGroup,
     lister::ListerFile
 };
 
@@ -21,7 +21,7 @@ use clang_sys::*;
 #[derive(Debug, Clone)]
 pub enum Error {
 
-    FileInPool(ErrorPosition, String),
+    // FileInPool(ErrorPosition, String),
     CannotOpenFile(ErrorPosition, String, String),
 
 }
@@ -30,11 +30,7 @@ impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
-            ErrorGroup::from(
-                Path::new(file!())
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap()
+            FileGroup::from(filename!()
             ) as u8, 
             unsafe { *(self as *const Self as *const u8) }
         );
@@ -45,17 +41,6 @@ impl Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
-            Self::FileInPool(pos, f) => {
-                fmtperr!(pos,
-                "File already processed!",
-                "
-                    File...
-                        {}
-                    is already inside the {}.
-                ",
-                    fmterr_val!(f),
-                    fmterr_name!(ENVIRONMENT_POOL)
-                )}
             Self::CannotOpenFile(pos, f,err ) => {
                 fmtperr!(pos,
                 "Cannot open file!",
@@ -90,20 +75,20 @@ pub struct Environment {
     
 }
 
-lazy_static!(
-    /// ### pool of file environments.
-    /// 
-    /// Environments can depend on standalone switch,
-    /// therefore we have environment.full which is 
-    /// a copy of the file and environment.bodyclean
-    /// which is a copy of the file without function bodies.
-    #[allow(unused_variables)]
-    #[allow(non_upper_case_globals)]
-    pub static ref ENVIRONMENT_POOL: Mutex<HashMap<OsString, Environment>> = {
-        let a = HashMap::new();
-        Mutex::new(a)
-    };
-);
+// lazy_static!(
+//     /// ### pool of file environments.
+//     /// 
+//     /// Environments can depend on standalone switch,
+//     /// therefore we have environment.full which is 
+//     /// a copy of the file and environment.bodyclean
+//     /// which is a copy of the file without function bodies.
+//     #[allow(unused_variables)]
+//     #[allow(non_upper_case_globals)]
+//     pub static ref ENVIRONMENT_POOL: Mutex<HashMap<OsString, Environment>> = {
+//         let a = HashMap::new();
+//         Mutex::new(a)
+//     };
+// );
 
 
 pub(super) mod offset {
@@ -127,6 +112,7 @@ pub(super) mod offset {
         New
 
     }
+
     /// Extraction stack to extract (offset start, offset end)
     /// of a clang_VisitChildren extern "C" function.
     /// 
@@ -271,14 +257,14 @@ impl Environment {
         file: &ListerFile,
         cur: CXCursor
         
-    ) -> Result<(), Error> 
+    ) -> Result<Environment, Error> 
     { 
 
-        if ENVIRONMENT_POOL.lock().unwrap().contains_key(&file.path) {
-            reterr!(Error::FileInPool,
-                file.path.clone().to_string_lossy().to_string()
-            );
-        }
+        // if ENVIRONMENT_POOL.lock().unwrap().contains_key(&file.path) {
+        //     reterr!(Error::FileInPool,
+        //         file.path.clone().to_string_lossy().to_string()
+        //     );
+        // }
         
         let filestr = 
         match std::fs::read_to_string(Path::new(&file.path)) {
@@ -317,15 +303,15 @@ impl Environment {
 
         }
 
-        ENVIRONMENT_POOL.lock().unwrap().insert(file.path.clone(), Environment { 
+        Ok(Environment { 
             full: filestr.to_owned(),
             bodyclean: clean.to_owned()
-        });
+        })
 
         // println!("{}", clean);
         // stack.iter().for_each(|x| println!("{:?}", x));
 
-        Ok(())
+        // Ok(())
 
         
 

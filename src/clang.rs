@@ -1,5 +1,6 @@
 use crate::{
-    error::{ErrorGroup, ErrorPosition}, 
+    error::ErrorPosition,
+    filegroup::FileGroup,
     lister::ListerFile
 };
 
@@ -26,7 +27,7 @@ impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
-            ErrorGroup::from(
+            FileGroup::from(
                 Path::new(file!())
                     .file_name()
                     .and_then(|s| s.to_str())

@@ -1,48 +1,49 @@
-use std::str::FromStr;
-use strum_macros::*;
+// use std::str::FromStr;
+// use strum_macros::*;
+// use crate::filegroup::*;
 
-#[repr(u8)]
-#[allow(dead_code)]
-#[derive(EnumString)]
-pub enum ErrorGroup {
-    #[strum(serialize="unknown file")]
-    Unknown,
+// #[repr(u8)]
+// #[allow(dead_code)]
+// #[derive(EnumString)]
+// pub enum FileGroup {
+//     #[strum(serialize="unknown file")]
+//     Unknown,
 
-    #[strum(serialize="argument.rs")]
-    Argument,
+//     #[strum(serialize="argument.rs")]
+//     Argument,
 
-    #[strum(serialize="config.rs")]
-    Config,
+//     #[strum(serialize="config.rs")]
+//     Config,
 
-    #[strum(serialize="lister.rs")]
-    Lister,
+//     #[strum(serialize="lister.rs")]
+//     Lister,
 
-    #[strum(serialize="extract.rs")]
-    Extract,
+//     #[strum(serialize="extract.rs")]
+//     Extract,
 
-    #[strum(serialize="clang.rs")]
-    Clang,
+//     #[strum(serialize="clang.rs")]
+//     Clang,
 
-    #[strum(serialize="environment.rs")]
-    Environment,
+//     #[strum(serialize="environment.rs")]
+//     Environment,
 
-    #[strum(serialize="translate.rs")]
-    Translate
+//     #[strum(serialize="translate.rs")]
+//     Translate
 
-}
+// }
 
-impl ErrorGroup {
+// impl FileGroup {
     
-    pub fn from(value: &str) -> Self {
+//     pub fn from(value: &str) -> Self {
     
-        match ErrorGroup::from_str(value) {
-            Ok(val) => {val}
-            _ => {ErrorGroup::Unknown}
-        }
+//         match FileGroup::from_str(value) {
+//             Ok(val) => {val}
+//             _ => {FileGroup::Unknown}
+//         }
         
-    }
+//     }
 
-}
+// }
 
 pub(super) fn type_name<T>(_: &T) -> String { 
     format!("{}", std::any::type_name::<T>())

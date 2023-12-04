@@ -1,7 +1,9 @@
 use crate::{
     config::Config, 
     argument::Argument,
-    error::{ErrorGroup, ErrorPosition}
+    error::ErrorPosition,
+    filegroup::FileGroup,
+    globals::GLOBALS
 };
 
 use std::{
@@ -28,7 +30,7 @@ impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
-            ErrorGroup::from(
+            FileGroup::from(
                 Path::new(file!())
                     .file_name()
                     .and_then(|s| s.to_str())
@@ -192,6 +194,8 @@ fn absolute_path(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
 #[allow(non_snake_case)]
 pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, Error> {
 
+    let settings = GLOBALS.read().unwrap().clone();
+
     let arg_files = match args
         .iter()
         .find(|x| match x 
@@ -245,14 +249,14 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
     };
 
     if arg_recipe_name.is_empty() {
-        warn!(
+        if settings.get_warn() { warn!(
             "Did not find a recipe!",
             "
                 No recipe was passed through cmd-line arguments.
             "
-        );
+        );}
     } else if arg_recipe.is_none() {
-        warn!(
+        if settings.get_warn() { warn!(
             "Did not find a recipe!",
             "
                 No recipe with the name...
@@ -260,7 +264,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                 ... was found.
             ",
                 fmterr_val!(arg_recipe_name)
-        );
+        );}
     }
 
     let mut files = Vec::<ListerFile>::new();
@@ -292,7 +296,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                 match Path::new(&confpath).is_absolute() {
                     true => {confpath}
                     _ => { 
-                        warn!(
+                        if settings.get_warn() {warn!(
                         "Failed to extract absolute path!",
                         "
                             Could not extract a absolute path from...
@@ -302,7 +306,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                         ",
                             fmterr_val!(run.path), 
                             fmterr_val!(confpath.display())
-                        );
+                        );}
                         break;
                     }
                 }
@@ -329,7 +333,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                 match get_max_depth(&fullpath) {
                     Some(depth) => {depth}
                     _ => {
-                        warn!(
+                        if settings.get_warn() { warn!(
                         "Failed to extract max depth!",
                         "
                             Could not extract the maximum depth of file...
@@ -339,7 +343,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                         ",
                             fmterr_val!(run.path), 
                             fmterr_val!(fullpath.to_string_lossy().to_string())
-                        );
+                        );}
                         continue;
                     }
                 }
@@ -356,7 +360,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
             {
                 Ok(res) => {res}
                 Err(err) => {
-                    warn!(
+                    if settings.get_warn() { warn!(
                     "Failed to extract max depth!",
                     "
                         Failed to open file...
@@ -369,7 +373,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                         fmterr_val!(run.path),
                         fmterr_val!(fullpath.display()),
                         err.to_string().bold()
-                    );
+                    );}
                     continue;
                 }   
 
@@ -384,7 +388,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                     }
                 },
                 Err(err) => {
-                    warn!(
+                    if settings.get_warn() { warn!(
                     "Failed to extract max depth!",
                     "
                         Failed to open file...
@@ -397,7 +401,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                         fmterr_val!(run.path),
                         fmterr_val!(fullpath.display()),
                         err.to_string().bold()
-                    );
+                    );}
                 }
             }});
 
@@ -419,7 +423,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                             path: OsString::from(ret)
                         });
                     } else {
-                        warn!(
+                        if settings.get_warn() { warn!(
                         "Cannot find file!",
                         "
                             File given via. cmd-line arguments...
@@ -430,7 +434,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
                         ",
                             fmterr_val!(str),
                             fmterr_val!(ret.display())
-                        )
+                        )}
                     }
 
                 }
@@ -449,7 +453,11 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
     } else {
 
         // Removes duped.
-        Ok(files.into_iter().unique_by(|x|x.path.clone()).collect_vec())
+        Ok(files
+            .into_iter()
+            .unique_by(|x|x.path.clone())
+            .collect_vec()
+        )
 
     } 
 

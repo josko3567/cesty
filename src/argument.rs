@@ -1,5 +1,9 @@
-use crate::error::{ErrorGroup, ErrorPosition};
-use crate::globals::{GLOBALS, Degree};
+use crate::{
+    config::Config,
+    error::ErrorPosition,
+    filegroup::FileGroup,
+    globals::{GLOBALS, self}
+};
 
 use std::{
     fmt::Display, 
@@ -34,7 +38,7 @@ impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
-            ErrorGroup::from(
+            FileGroup::from(
                 Path::new(file!())
                     .file_name()
                     .and_then(|s| s.to_str())
@@ -70,7 +74,7 @@ impl Display for Error {
                 fmtperr!(pos,
                 "Invalid argument!", 
                 "
-                    Command line argument...
+                    Invalid command line argument...
                       {}{}{}
                 ", fmterr_val!{name}, 
                     if similar.is_empty() {""} else {"\n"}, 
@@ -104,6 +108,9 @@ impl std::error::Error for Error {}
 /// ```
 /// All tests whose `compiler: name:` value isn't untouchable have their compiler
 /// change from whatever they had before to `clang`.
+/// # Warning.
+/// If you want your override to take affect please handle it in 
+/// [`config::Config::merge_overrides`](crate::config::Config)
 pub enum Override {
 
     #[strum(props(ignore="true"))]
@@ -305,7 +312,7 @@ pub enum Argument {
 
     #[strum(props(
         position       ="0", // First argument is the recipe, -1 would be for last argument.
-        body           ="-W", // Matches nothing at pos 1, and returns rest as input.
+        body           ="-w", // Matches nothing at pos 1, and returns rest as input.
         start          ="-"
     ))]
     Warnings,
@@ -565,7 +572,7 @@ impl Property {
         property.body_separator.1 = 
             match value.get_str(property.body_separator.0) 
             {
-                Some(res) => {res.chars().next().unwrap_or('.')}
+                Some(res) => {Some(res.chars().next().unwrap_or('.'))}
                 None => {Property::default().body_separator.1}
             }
         }
@@ -1104,8 +1111,9 @@ impl Argument {
                 match property.values.1.iter().find(|x| x.as_str() == value)
                 {
                     Some(res) => {
-                        GLOBALS.write().unwrap().message = Degree::from(
-                            &value.chars().next().unwrap()
+                        GLOBALS.write().unwrap().set_message_amount(
+                            globals::Degree::from(&value.chars().next().unwrap()),
+                            globals::AccessLevel::from_filename(filename!())
                         );
                         Argument::MessageAmount(res.to_owned())
                     }
@@ -1123,7 +1131,11 @@ impl Argument {
                 Argument::PrintInstructions
             }
             Self::Warnings => {
-                GLOBALS.write().unwrap().warn = true;
+                GLOBALS.write().unwrap().set_warn(
+                    true, 
+                    globals::AccessLevel::from_filename(filename!())
+                );
+                // eprintln!("{:#?}", globals::AccessLevel::from_filename(filename!()));
                 Argument::Warnings
             }
             Self::Unknown(_) => {
@@ -1137,6 +1149,77 @@ impl Argument {
 
     }
     
+    /// Find a similar argument from PROPERTIES with 
+    /// [normalized Damerau Levenshtein](normalized_damerau_levenshtein) 
+    /// string similarity function.
+    fn find_similar(
+        name: &String,
+        pos: &String,
+        it: std::collections::hash_map::Iter<'_, String, (Argument, Property)>
+    ) -> Error {
+
+        const SIMILAR_MINIMUM: f64 = 0.70000;
+
+        let mut positional: (&String, &Argument) 
+            = (&String::new(), &Argument::default());
+
+        let mut similar:    (&String, &Argument, f64) 
+            = (&String::new(), &Argument::default(), 0.00000);
+
+        for items in it {
+            if items.0.parse::<u32>().is_ok() {
+                if items.0 == pos {positional = (items.0, &items.1.0)}
+                continue;   
+            }
+            let sim = normalized_damerau_levenshtein(
+                items.0.as_str(),
+                name.as_str()
+            ).abs();
+            if sim > similar.2 {
+                similar.2 = sim;
+                similar.1 = &items.1.0;
+                similar.0 = items.0;
+            }                    
+        }
+        // Eww, but its cool????
+        if similar.2 > SIMILAR_MINIMUM {
+            return Error::UnknownArgument(
+                errpos!(),
+                name.to_owned(),
+                format!("...perhaps you meant to type {}?", 
+                    fmterr_val!(similar.0))
+            )
+        }
+        // Wont ever be matched cuz if it was a positional
+        // argument then it wont end up here, fuk
+        else if !positional.0.is_empty() {
+            return Error::UnknownArgument(
+                errpos!(),
+                name.to_owned(),
+                format!("... perhaps you typed your positional \
+                    argument {} wrong?", 
+                    fmterr_val!(positional.1.to_string()))
+            )
+        }
+        else {
+            if !similar.0.is_empty() {
+                return Error::UnknownArgument(
+                    errpos!(),
+                    name.to_owned(),
+                    format!("...perhaps you meant to type {}?", 
+                        fmterr_val!(similar.0))
+                )
+            }
+            else {
+                return Error::UnknownArgument(
+                    errpos!(),
+                    name.to_owned(),
+                    String::new()
+                );
+            }
+        }
+    }
+
     /// Try to convert a string into a Argument.
     /// #Example
     /// ```
@@ -1212,60 +1295,12 @@ impl Argument {
                 {
                     Some(res) => {res.clone()}
                     None => {
-                        let mut positional: (&String, &Argument) = (&String::new(), &Argument::default());
-                        let mut similar: (&String, &Argument, f64) = (&String::new(), &Argument::default(), 0.00000);
-                        for items in properties_unlocked.iter() {
-                            if items.0 == &pos {
-                                positional = (items.0, &items.1.0);
-                                continue;   
-                            }
-                            if items.0.parse::<u32>().is_ok() {
-                                continue;
-                            }
-                            let sim = normalized_damerau_levenshtein(
-                                items.0.as_str(),
-                                name.as_str()
-                            ).abs();
-                            if sim > similar.2 {
-                                similar.2 = sim;
-                                similar.1 = &items.1.0;
-                                similar.0 = items.0;
-                            }                    
-                        }
-                        // Eww, but its cool????
-                        if similar.2 > 0.70000 {
-                            reterr!(Error::UnknownArgument, 
-                                name,
-                                format!("...perhaps you meant to type {}?", 
-                                    fmterr_val!(similar.0))
-                            )
-                        }
-                        // Wont ever be matched cuz if it was a positional
-                        // argument then it wont end up here, fuk
-                        else if !positional.0.is_empty() {
-                            reterr!(Error::UnknownArgument, 
-                                name,
-                                format!("... perhaps you typed your positional \
-                                    argument {} wrong?", 
-                                    fmterr_val!(positional.1.to_string()))
-                            )
-                        }
-                        else {
-                            if !similar.0.is_empty() {
-                                reterr!(Error::UnknownArgument, 
-                                    name,
-                                    format!("...perhaps you meant to type {}?", 
-                                        fmterr_val!(similar.0))
-                                )
-                            }
-                            else {
-                                reterr!(Error::UnknownArgument, 
-                                    name,
-                                    String::new()
-                                )
-                            }
-                        }
-                    }                
+                        // This is the part find the similar argument.
+                        return Err(
+                            Argument::find_similar(
+                                &name, 
+                                &pos, 
+                                properties_unlocked.iter()))}                
                 }
             }  
         };
@@ -1351,6 +1386,10 @@ impl Argument {
         }
 
         Ok(args)
+
+    }
+
+    pub fn try_from_config(v: &Config) {
 
     }
 

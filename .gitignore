@@ -2,6 +2,7 @@
 /target/*.*
 !/target/debug/examples/lib_1
 !/target/debug/.cesty.yaml
+/target/release
 /local
 TODO.md
 develop.md

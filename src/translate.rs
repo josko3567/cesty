@@ -1,4 +1,4 @@
-use crate::extract::*;
+use crate::{extract::*, environment::Environment, config::Config};
 
 
 struct TranslatedFiles {
@@ -10,13 +10,21 @@ struct TranslatedFiles {
 
 impl TranslatedFiles {
 
-    fn from_multi(input: &Extract) -> Vec<TranslatedFiles> {
+    fn from_multi(
+        input: &Extract, 
+        env:   &Environment, 
+        conf:  &Config
+    ) -> Vec<TranslatedFiles> {
 
         return vec![];
 
     }
 
-    fn from_single(input: &ExtractTest, file: &String) -> TranslatedFiles {
+    fn from_single(
+        input: &Test, 
+        env:   &Environment,
+        conf:  &Config
+    ) -> TranslatedFiles {
 
         return TranslatedFiles {
             arg: String::new(),

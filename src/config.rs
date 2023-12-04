@@ -1,6 +1,8 @@
 use crate::{
     argument::{Argument, Override}, 
-    error::{ErrorGroup, ErrorPosition}
+    error::ErrorPosition,
+    filegroup::FileGroup,
+    globals::{GLOBALS, self}
 };
 
 use serde::Deserialize;
@@ -28,12 +30,7 @@ impl Error {
 
     pub fn code(&self) -> String {
         return format!("E;{:X}:{:X}", 
-            ErrorGroup::from(
-                Path::new(file!())
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap()
-            ) as u8, 
+            FileGroup::from(filename!()) as u8, 
             unsafe { *(self as *const Self as *const u8) }
         );
     }
@@ -44,11 +41,14 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
             Self::NoConfigFile(pos) => {
-                fmtwarnp!(pos,
+                if GLOBALS.read().unwrap().get_warn() { fmtwarnp!(pos,
                 "No config file was found.",
                 "
                     Proceeding with argument passed files.
                 ")}
+                else {
+                    "".white()
+                }}
             Self::CannotOpenConfig(pos, str) => {
                 fmtperr!(pos,
                 "Cannot open file.",
@@ -76,7 +76,7 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Default)]
 pub struct ConfigCestyData {
     #[serde(rename = "use")] 
     pub active: Option<bool>,
@@ -84,16 +84,17 @@ pub struct ConfigCestyData {
     pub output: Option<String>
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Default)]
 pub struct ConfigCesty {
     
-    pub flags:     Option<String>,
+    pub message: Option<String>,
+    pub warn: Option<bool>,
     pub metadata:  Option<ConfigCestyData>,
     pub dataset:   Option<ConfigCestyData>
 
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Default)]
 pub struct ConfigCompiler {
 
     pub name:      Option<String>,
@@ -102,7 +103,7 @@ pub struct ConfigCompiler {
 
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Default)]
 pub struct ConfigRecipeRun {
 
     pub path:     String,
@@ -111,16 +112,17 @@ pub struct ConfigRecipeRun {
 
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Default)]
 pub struct ConfigRecipe {
 
     pub name:      String,
     pub run:       Vec<ConfigRecipeRun>,
-    pub force:     Option<bool>
+    pub force:     Option<bool>,
+    pub prerun:    Option<String>
 
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Default)]
 pub struct Config {
 
     #[serde(skip_deserializing)]
@@ -208,7 +210,9 @@ impl Config {
         };
 
         let configCestyEmpty: ConfigCesty = ConfigCesty { 
-            flags: None, 
+            // flags: None, 
+            message: None,
+            warn: None,
             metadata: Some(configCestyMetaDataEmpty), 
             dataset: Some(configCestyUserDataEmpty) 
         };
@@ -230,6 +234,48 @@ impl Config {
 
     }
 
+    fn set_globals(&self) {
+
+        if self.cesty.is_some() {
+
+            _ = self.cesty.as_ref().unwrap().warn.as_ref().is_some_and(
+                |x| {
+                    GLOBALS.write().unwrap().set_warn(
+                           x.to_owned(), 
+                           globals::AccessLevel::from_filename(filename!())
+                    );
+                    true
+            });
+
+            _ = self.cesty.as_ref().unwrap().message.as_ref().is_some_and(
+                |x| {
+                    match globals::Degree::try_from(x.as_str())
+                    {
+                        Ok(res) => {
+                            GLOBALS.write().unwrap().set_message_amount(
+                                res.clone(), 
+                            globals::AccessLevel::from_filename(filename!())
+                            );
+                        }
+                        Err(_) => {
+                            if GLOBALS.read().unwrap().get_warn() { warn!(
+                            "Unexpected value from config!",
+                            "
+                                Unexpected value...
+                                  {}
+                                ... for {}.
+                            ",
+                                fmterr_val!(x),
+                                fmterr_func!("cesty: message: ...")
+                            )}
+                        }
+                    };
+                    true
+            });
+
+        }
+
+    }
 
     /// Read config file from optional string.
     /// Used in tandem with [`config::find()`](find())
@@ -268,7 +314,8 @@ impl Config {
         };
 
         self.path = String::from(filepure);
-
+        self.set_globals();
+        
         Ok(())
 
     }

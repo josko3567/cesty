@@ -9,30 +9,28 @@
 <!-- #!cesty;
 ---  
 info:
-	standalone: true
-warn: true
-	run: true
+    standalone: true
+    warn: true
+    run: true
 test:
-	- name: def
-	  code: >
-		struct innerbook = my_book();
-		if(innerbook.author == BOOK_AUTHOR
+    - name: def
+      code: >
+        struct innerbook = my_book();
+        if(innerbook.author == BOOK_AUTHOR
         && innerbook.name == BOOK_NAME
         && innerbook.sold_amount == BOOK_SALES ) {
-		
-			return true;
-
-		}
-		return false;
-	  expect: true
+          return true;
+        }
+        return false;
+      expect: true
 execute:
-	- make -C ".."
+    - make -C ".."
 
 compiler:
-	global:
-		name: override
-	name: clang	
-	flags: -std=c11
+    global:
+        name: override
+    name: clang	
+    flags: -std=c11
 ...--->
 
 returns a copy of the default book.
@@ -56,7 +54,7 @@ struct innerbook my_book()
 	};
 
 }
-
+`
 int fooishlybarful(int i) {
 
 	return 100+i;

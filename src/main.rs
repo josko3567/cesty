@@ -16,6 +16,11 @@ use core::panic;
 #[allow(unused_imports)]
 use std::{env, process::exit};
 
+// -----------------------
+// Files from this project
+#[macro_use]
+mod filegroup;
+
 mod globals;
 #[allow(unused_imports)]
 use crate::globals::GLOBALS;
@@ -52,6 +57,9 @@ mod translate;
 #[allow(unused_variables)]
 fn main() -> Result<(), String> {
 
+    #[cfg(debug_assertions)]
+    env::set_var("RUST_BACKTRACE", "full");
+
     let mut args = match 
         Argument::try_from_vec(&env::args().collect()) 
     {
@@ -83,55 +91,8 @@ fn main() -> Result<(), String> {
     
     conf.merge_overrides(&args);
 
-    // println!("{:#?}", conf);
-    // let file: &str = "foo.c";
-    // warn!("Incoming request soldier!",
-    // "
-    //     Glob attempted to match:
-    //         peepee
-    //     Could not find it.
-    // "
-    // );
-    
-    // let err = fmterr!(
-    // "File was unable to be opened!",
-    // "
-    //     While trying to open file 
-    //       poop
-    //     Needs sudo to be opened!
-    // "
-    // );
-
-    // eprintln!("{:#?}", errpos!());
-
-    // // Append only non existent options
-    let confargs = 
-        conf.cesty
-            .as_ref()
-            .unwrap()
-            .flags
-            .as_ref();
-
-    if confargs.is_some() {
-        match Argument::try_from_vec(
-            &confargs.unwrap()
-                .split_whitespace()
-                .map(String::from)
-                .collect::<Vec<String>>()
-            ) 
-        {
-            Ok(vector) => {
-                let mut filtered: Vec<Argument> = vector.into_iter().filter(
-                    |x| args.iter().find(|y| &x == y).is_none()
-                ).collect();
-                args.append(&mut filtered);
-            },
-            Err(err) => {return Err(err.code())}
-        }  
-    }  
-
-    // // println!("{:#?}", conf);
-    // // args.iter().for_each(|x| x.print());
+    println!("{:#?}", conf);
+    // args.iter().for_each(|x| x.print());
     
     let files = 
     match lister::get_list(&conf, &args) {
@@ -170,31 +131,33 @@ fn main() -> Result<(), String> {
         //     }}
         // };
 
-        // println!("{:#?}:\n",  
-        //     &res.filepath
-        // );
 
-        // res.tests.iter().for_each(|x| {
-        //     println!(
-        //         "{} {}\n\n{}:{}",
-        //         x.returns,
-        //         x.function,
-        //         x.line,
-        //         x.column
-        //     );
-        //     x.comment.iter().for_each(|x| println!(
-        //         "---\n\
-        //         {}\
-        //         ...\n",
-        //         x
-        //     ))
-        // });
+
+        println!("{:#?}:\n",  
+            &res.filepath
+        );
+
+        res.tests.iter().for_each(|x| {
+            println!(
+                "{} {}\n\n{}:{}",
+                x.returns,
+                x.function,
+                x.line,
+                x.column
+            );
+            x.yaml.iter().for_each(|x| println!(
+                "---\n\
+                {:#?}\
+                ...\n",
+                x
+            ))
+        });
 
         let env = match Environment::from_lister_into_pool(
             &file, 
             clang.cur.clone())
         {
-            Ok(()) => {},
+            Ok(res) => {res},
             Err(err) => {
                 eprintln!("{}", err);
                 return Err(err.code());
@@ -205,7 +168,7 @@ fn main() -> Result<(), String> {
 
     }
 
-    println!("{}", GLOBALS.read().unwrap().message);
+    println!("{}", GLOBALS.read().unwrap().get_message_amount());
     
     Ok(())
 

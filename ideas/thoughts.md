@@ -232,12 +232,12 @@ info:
     run: true
 
 test:
-    - name: testy
-      input: ["Mouse pouse douse spouse"]
-      expect: 4
+    - name: testy               # Name of the test (optional)
+      input: --peepee --poopoo  # argv input (optional)
+      code: >                   # Code to be executed
+        return true; 
+      expect: true              # Expected output of test{code}
     
-    - ["hello world!"]
-
     - input: -pm -am # Converted to argv if
       # we are using yaml key "code:".
       code: >
@@ -262,16 +262,14 @@ test:
         if(expmet == tests)
             return true;   
         return false;
-
-expect:
-    - 2
-    - true
+      expect: true
 
 # Default value, takes all .o 
 # objects in the current working folder
 # and includes them in the 
-object:
-    - ./*.o
+objects:
+    - $(PATH)/*.o
+
 
 # execute: contains a list of commands to run
 # before cesty starts creating & compiling tests.
@@ -282,7 +280,7 @@ execute:
 
 # What compiler to use and 
 compiler:
-    global:
+    priority:
         name: override
         flags: append
         libraries: ignore
@@ -300,6 +298,8 @@ compiler:
         -lm -lncursesw -lBlocksRuntime
          ./ext/viwerr/viwerr.a
          ./ext/PDCurses/wincon/pdcurses.a
+    # objects: >
+    #     -
 
 */
 ```
