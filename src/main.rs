@@ -53,12 +53,13 @@ use crate::environment::*;
 #[allow(dead_code)]
 mod translate;
 
+mod builder;
 
 #[allow(unused_variables)]
 fn main() -> Result<(), String> {
 
     #[cfg(debug_assertions)]
-    env::set_var("RUST_BACKTRACE", "full");
+        env::set_var("RUST_BACKTRACE", "full");
 
     let mut args = match 
         Argument::try_from_vec(&env::args().collect()) 
@@ -91,7 +92,7 @@ fn main() -> Result<(), String> {
     
     conf.merge_overrides(&args);
 
-    println!("{:#?}", conf);
+    // println!("{:#?}", conf);
     // args.iter().for_each(|x| x.print());
     
     let files = 
@@ -114,7 +115,7 @@ fn main() -> Result<(), String> {
         };
             
 
-        let res = Extract::from_lister(
+        let ext = Extract::from_lister(
             &file, 
             clang.cur.clone()
         );
@@ -133,27 +134,28 @@ fn main() -> Result<(), String> {
 
 
 
-        println!("{:#?}:\n",  
-            &res.filepath
-        );
+        // println!("{:#?}:\n",  
+        //     &res.filepath
+        // );
 
-        res.tests.iter().for_each(|x| {
-            println!(
-                "{} {}\n\n{}:{}",
-                x.returns,
-                x.function,
-                x.line,
-                x.column
-            );
-            x.yaml.iter().for_each(|x| println!(
-                "---\n\
-                {:#?}\
-                ...\n",
-                x
-            ))
-        });
+        // res.tests.iter().for_each(|x| {
+        //     println!(
+        //         "{} {}\n\n{}:{}",
+        //         x.returns,
+        //         x.function,
+        //         x.line,
+        //         x.column
+        //     );
+        //     x.yaml.iter().for_each(|x| println!(
+        //         "---\n\
+        //         {:#?}\
+        //         ...\n",
+        //         x
+        //     ))
+        // });
 
-        let env = match Environment::from_lister_into_pool(
+
+        let env = match Environment::from_lister(
             &file, 
             clang.cur.clone())
         {
@@ -163,12 +165,41 @@ fn main() -> Result<(), String> {
                 return Err(err.code());
             }
         };
+
+        let arg_recipe = args.iter().find(|a|{
+            match a {
+                Argument::Recipe(res) => {true}
+                _ => {false}
+            }
+        });
+
+        let recipe = if arg_recipe.is_some() {
+            match arg_recipe.unwrap() {
+                Argument::Recipe(name) => {Some(name.clone())}
+                _ => {Some("".to_string())}
+            }
+        } else {
+            None
+        };
+
+        ext.tests.iter().for_each(|test|{
+
+            test.yaml.iter().for_each(|yaml|{
+
+                _ = builder::build_test(recipe.clone(), &conf, yaml, &env)
+
+            })
+
+        });
+
+        // println!("\n---------------\n{}\n", env.full);
+        // println!("\n---------------\n{}\n", env.bodyclean);
         
         clang.close();
 
     }
 
-    println!("{}", GLOBALS.read().unwrap().get_message_amount());
+    // println!("{}", GLOBALS.read().unwrap().get_message_amount());
     
     Ok(())
 

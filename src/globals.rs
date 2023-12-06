@@ -8,6 +8,10 @@ use strum_macros::Display;
 use crate::filegroup::FileGroup;
 
 // Specific ordering, Higher number means higher priority.
+
+/// Access level, aka. clearance for changing the value
+/// of a global value.
+/// The higher the number, the higher the clearance.
 #[repr(u8)]
 #[allow(dead_code)]
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
@@ -26,6 +30,14 @@ impl AccessLevel {
         unsafe { *(self as *const Self as *const u8) }
     }
 
+    /// Get access level from the source files' filename.
+    /// # Example:
+    /// ```
+    /// assert_eq!(
+    ///     AccessLevel::Config,
+    ///     AccessLevel::from_filename("config.rs")
+    /// );
+    /// ```
     pub fn from_filename(filename: &str) -> Self {
 
         let filegr = FileGroup::from(filename);
@@ -56,8 +68,6 @@ impl AccessLevel {
         }
 
     }
-
-    // fn from_i32()
 
 }
 
@@ -125,6 +135,9 @@ impl TryFrom<&str> for Degree {
 
 }
 
+/// Structure for all global values that can be
+/// set either inside the config or thorough 
+/// command line arguments.
 #[derive(Clone)]
 pub struct Globals {
     //              Value,   Was set & by whom
@@ -137,8 +150,9 @@ impl Default for Globals {
 
     fn default() -> Self {
         Globals { 
-            warn:           (false,             AccessLevel::default()), 
-            message_amount: (Degree::default(), AccessLevel::default())
+            warn:           (false,         AccessLevel::default()), 
+            message_amount: (Degree::Small, AccessLevel::default())
+            
         }
     }
 
@@ -174,3 +188,6 @@ impl Globals {
 lazy_static!{
     pub static ref GLOBALS: RwLock<Globals> = RwLock::new(Globals::default());
 }
+
+// Global constants
+const TEST_PATH: &'static str = ".cesty/testy/";

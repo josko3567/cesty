@@ -5,41 +5,43 @@
 	int i = 0;     \
 	i; \
 })
+
 /**
-<!-- #!cesty;
----  
-info:
-    standalone: true
-    warn: true
-    run: true
-test:
-    - name: def
-      code: >
-        struct innerbook = my_book();
-        if(innerbook.author == BOOK_AUTHOR
-        && innerbook.name == BOOK_NAME
-        && innerbook.sold_amount == BOOK_SALES ) {
-          return true;
-        }
-        return false;
-      expect: true
-execute:
-    - make -C ".."
-
-compiler:
-    global:
-        name: override
-    name: clang	
-    flags: -std=c11
-...--->
-
-returns a copy of the default book.
-# Examples
-```C
-assert(95923 == my_book().sold_amount);
-```
-*/
-__attribute__((deprecated))
+ * @brief
+ * returns a copy of the default book.
+ * EXECUTING: file --> function --> num. yaml --> test name
+ * <!-- #!cesty;
+ * ---  
+ * info:
+ *     standalone: true
+ *     warn: true
+ *     run: true
+ * test:
+ *     - name: def
+ *       code: |
+ *         struct innerbook = my_book();
+ *         if(innerbook.author == BOOK_AUTHOR
+ *         && innerbook.name == BOOK_NAME
+ *         && innerbook.sold_amount == BOOK_SALES ) {
+ *           return true;
+ *         }
+ *         return false;
+ *       expect: true
+ * 
+ * prerun:
+ *     - make -C ".."
+ * 
+ * compiler:
+ *   name: gcc
+ *   libraries: 
+ *     append: true
+ *     new: -lncursesw
+ *   flags: 
+ *     append: true
+ *     new: -std=c11
+ * ... 
+ * --->
+ */
 struct innerbook my_book()
 {
 	int foobar(int i) {

@@ -10,7 +10,7 @@ use std::{
     path::Path, 
     sync::Mutex, 
     collections::HashMap,
-    iter::{Enumerate, Peekable},
+    iter::{Enumerate, Peekable}, ops::Deref,
 };
 
 use indoc::formatdoc;
@@ -1045,9 +1045,9 @@ impl Argument {
     /// strings (arguments) from the vector of probable arguments as input.
     /// 
     /// This function is meant to be only used by `Argument::try_from_string()`
-    /// but none can stop from using it somewhere else.
+    /// but no one can stop from using it somewhere else.
     /// 
-    /// #Example
+    /// # Example
     /// ```
     /// let arg   = Argument::MessageAmount(String::new());
     /// let prop  = Property::generic_try_from(&arg);
@@ -1069,7 +1069,7 @@ impl Argument {
         name:     &str,
         value:    &str,
         full:     &str,
-        iter:     Option<&mut Peekable<Enumerate<std::slice::Iter<String>>>>
+        iter:     Option<&mut Peekable<std::slice::Iter<String>>>
     ) -> Self {
 
         match arg
@@ -1080,7 +1080,7 @@ impl Argument {
                     let uniter = iter.unwrap();
                     let mut arr: Vec<String> = vec![];
                     while let Some(item) = uniter.next() {
-                        arr.push(item.1.clone());
+                        arr.push(item.clone());
                     }
                     Self::Files(arr)
                 }
@@ -1158,7 +1158,7 @@ impl Argument {
         it: std::collections::hash_map::Iter<'_, String, (Argument, Property)>
     ) -> Error {
 
-        const SIMILAR_MINIMUM: f64 = 0.70000;
+        const SIMILAR_MINIMUM: f64 = 0.90000;
 
         let mut positional: (&String, &Argument) 
             = (&String::new(), &Argument::default());
@@ -1181,7 +1181,7 @@ impl Argument {
                 similar.0 = items.0;
             }                    
         }
-        // Eww, but its cool????
+        // Eww, but it's cool?
         if similar.2 > SIMILAR_MINIMUM {
             return Error::UnknownArgument(
                 errpos!(),
@@ -1221,7 +1221,7 @@ impl Argument {
     }
 
     /// Try to convert a string into a Argument.
-    /// #Example
+    /// # Example
     /// ```
     /// assert_eq!(
     ///     Argument::try_from_string(0, &String::from("--compiler.name=gcc"), None), 
@@ -1247,17 +1247,20 @@ impl Argument {
     /// )
     /// ```
     fn try_from_string(
-        p:  usize,
-        s:  &String,
-        it: Option<&mut Peekable<Enumerate<std::slice::Iter<String>>>>,
+        // p:  usize,   // Position inside the argument vector
+        s:  &String, // String slice
+        it: Option<&mut Peekable<std::slice::Iter<String>>>,
     ) -> Result<Self, self::Error> {
 
-        let pos = p.to_string();
+        static mut UNKNOWNS: Mutex<usize> = Mutex::new(1); // Drop in for detecting 
+        // arguments based on purely position, if a argument is unknown
+        // then its probably a positional argument.
+        // This 
+        // let pos = p.to_string();
 
         if s.is_empty() {
             reterr!(self::Error::UnknownArgument, String::from(s), String::new());
         }
-
         
         if PROPERTIES
             .lock()
@@ -1289,19 +1292,25 @@ impl Argument {
             .get(&name)
         {
             Some(res) => {res.clone()}
-            None => {               
+            None => {   
+                // unsafe {       
+                let mut cur_unknowns: usize = unsafe{ UNKNOWNS.lock().unwrap().deref().to_owned() };   
                 match properties_unlocked
-                    .get(&pos)
+                    .get(&cur_unknowns.to_string())
                 {
-                    Some(res) => {res.clone()}
+                    Some(res) => {
+                        cur_unknowns += 1; 
+                        unsafe{UNKNOWNS = Mutex::new(cur_unknowns)};
+                        res.clone()}
                     None => {
                         // This is the part find the similar argument.
                         return Err(
                             Argument::find_similar(
                                 &name, 
-                                &pos, 
+                                &cur_unknowns.to_string(), 
                                 properties_unlocked.iter()))}                
                 }
+                // }
             }  
         };
 
@@ -1371,13 +1380,13 @@ impl Argument {
     /// ```
     pub fn try_from_vec(v: &Vec<String>) -> Result<Vec<Self>, self::Error> {
         
-        let mut iter: Peekable<Enumerate<std::slice::Iter<'_, String>>> = v.into_iter().enumerate().peekable();
+        let mut iter: Peekable<std::slice::Iter<'_, String>> = v.into_iter().peekable();
         let mut args: Vec<Self> = vec![];
         iter.next();
         
         while let Some(chunk) = iter.next(){
 
-            match Argument::try_from_string(chunk.0, chunk.1, Some(&mut iter))
+            match Argument::try_from_string( chunk, Some(&mut iter))
             {
                 Ok(res) => {args.push(res)}
                 Err(err) => {return Err(err)}
@@ -1389,8 +1398,8 @@ impl Argument {
 
     }
 
-    pub fn try_from_config(v: &Config) {
+    // pub fn try_from_config(v: &Config) {
 
-    }
+    // }
 
 }

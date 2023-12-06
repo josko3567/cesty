@@ -77,7 +77,7 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 /// libclang's C engine in a structure.
-/// Initialized from `Clang::from_lister()`
+/// Initialized from a `Clang::from_lister()`.
 /// # Warning
 /// Must be manually closed with `Clang::close(&self)`
 pub struct Clang {
@@ -102,7 +102,7 @@ impl Default for Clang {
 
 impl Clang {
 
-    /// Initialize libclang Abstract Syntax Tree from a ListerFile.
+    /// Initialize libclang Abstract Syntax Tree from a [`ListerFile`].
     pub fn from_lister(
         file: &ListerFile
     ) -> Result<Clang, Error> 

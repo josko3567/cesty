@@ -1,69 +1,62 @@
-// use std::str::FromStr;
-// use strum_macros::*;
-// use crate::filegroup::*;
-
-// #[repr(u8)]
-// #[allow(dead_code)]
-// #[derive(EnumString)]
-// pub enum FileGroup {
-//     #[strum(serialize="unknown file")]
-//     Unknown,
-
-//     #[strum(serialize="argument.rs")]
-//     Argument,
-
-//     #[strum(serialize="config.rs")]
-//     Config,
-
-//     #[strum(serialize="lister.rs")]
-//     Lister,
-
-//     #[strum(serialize="extract.rs")]
-//     Extract,
-
-//     #[strum(serialize="clang.rs")]
-//     Clang,
-
-//     #[strum(serialize="environment.rs")]
-//     Environment,
-
-//     #[strum(serialize="translate.rs")]
-//     Translate
-
-// }
-
-// impl FileGroup {
-    
-//     pub fn from(value: &str) -> Self {
-    
-//         match FileGroup::from_str(value) {
-//             Ok(val) => {val}
-//             _ => {FileGroup::Unknown}
-//         }
-        
-//     }
-
-// }
-
-pub(super) fn type_name<T>(_: &T) -> String { 
-    format!("{}", std::any::type_name::<T>())
-}
-
+/// The source from where the error was thrown.
+/// # Example
+/// Use the [`errpos!`] macro to get the current `ErrorPosition`.
+/// ```
+/// let pos: ErrorPosition = errpos!();
+/// ```
 #[derive(Debug, Default, Clone)]
 pub struct ErrorPosition {
-
+    
     pub file:     String,
     pub function: String,
     pub line:     u32,
     pub column:   u32
-
+    
 }
 
-// const color_var: CustomColor = CustomColor {r: 252, b: 162, g:3};
+/// Return a [`String`] name for the argument type.
+pub(super) fn type_name<T>(_: &T) -> String { 
+    format!("{}", std::any::type_name::<T>())
+}
 
-/// From lister.rs // Dimmed
-/// Warning! // Yellow, Bold.
-/// \t ... /// Yellow, yellow bold for $($x:expr),*
+/// Return a [`String`] name of the function.
+macro_rules! attain_function_name {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let name = type_name_of(f);
+        name.strip_suffix("::f").unwrap()
+    }}
+}
+
+/// Formats a warning and the position listed as the source
+/// is the line, column & file from where `fmtwarn!` was called.
+/// # Argument
+/// - The first argument is a short-hand version of the warning.
+/// - The second argument is a full description of the warning.
+///   It can accept variadic arguments and
+///   uses `{}` for displaying them.
+/// 
+/// # Example
+/// ```
+/// eprintln!("{}", fmtwarn!(
+///     "No arguments found!",
+///     "
+///         No arguments were passed to cesty.
+///           Using default recipe.
+///     "
+/// ));
+/// ```
+/// Outputs:
+/// ```none
+/// (dimmed ⚪) From (dimmed bold ⚪) file.rs...
+/// (dimmed ⚪) In (dimmed bold ⚪) foo at (dimmed bold ⚪) 13:37...
+/// (🟡)Warning: (bold ⚪) No arguments found!
+///   (⚪)No arguments passed to cesty.
+///     (⚪)Using default recipe.
+/// ```
 #[allow(unused_macros)]
 macro_rules! fmtwarn {
     
@@ -107,7 +100,35 @@ macro_rules! fmtwarn {
     };
 }
 
-macro_rules! fmtwarnp {
+/// Formats a warning and the position listed is given as the first
+/// argument.
+/// # Argument
+/// - The first argument the a [`ErrorPosition`].
+/// - The second argument is a short-hand version of the warning.
+/// - The third argument is a full description of the warning.
+///   It can accept variadic arguments and
+///   uses `{}` for displaying them.
+/// 
+/// # Example
+/// ```
+/// eprintln!("{}", fmtpwarn!(
+///     errpos!(),
+///     "No arguments found!",
+///     "
+///         No arguments were passed to cesty.
+///           Using default recipe.
+///     "
+/// ));
+/// ```
+/// Outputs:
+/// ```none
+/// (dimmed ⚪) From (dimmed bold ⚪) file.rs...
+/// (dimmed ⚪) In (dimmed bold ⚪) foo at (dimmed bold ⚪) 13:37...
+/// (🟡)Warning: (bold ⚪) No arguments found!
+///   (⚪)No arguments passed to cesty.
+///     (⚪)Using default recipe.
+/// ```
+macro_rules! fmtpwarn {
     
     ($pos:expr, $short:literal, $full:literal $(, $x:expr)*) => {
 
@@ -144,6 +165,32 @@ macro_rules! fmtwarnp {
     };
 }
 
+/// Prints a warning and the position listed as the source
+/// is the line, column & file from where `warn!` was called.
+/// # Argument
+/// - The first argument is a short-hand version of the warning.
+/// - The second argument is a full description of the warning.
+///   It can accept variadic arguments and
+///   uses `{}` for displaying them.
+/// 
+/// # Example
+/// ```
+/// warn!(
+///     "No arguments found!",
+///     "
+///         No arguments were passed to cesty.
+///           Using default recipe.
+///     "
+/// );
+/// ```
+/// Outputs:
+/// ```none
+/// (dimmed ⚪) From (dimmed bold ⚪) file.rs...
+/// (dimmed ⚪) In (dimmed bold ⚪) foo at (dimmed bold ⚪) 13:37...
+/// (🟡)Warning: (bold ⚪) No arguments found!
+///   (⚪)No arguments passed to cesty.
+///     (⚪)Using default recipe.
+/// ```
 macro_rules! warn {
     ($short:literal, $full:literal $(, $x:expr)*) => {
 
@@ -156,7 +203,7 @@ macro_rules! warn {
                     .unwrap()
                     .bold(),
 
-                function!().bold(),
+                attain_function_name!().bold(),
                 format!("{}",line!()).bold(), 
                 format!("{}",column!()).bold()
             ).dimmed(),
@@ -184,27 +231,16 @@ macro_rules! warn {
 
 }
 
-macro_rules! function {
-    () => {{
-        fn f() {}
-        fn type_name_of<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let name = type_name_of(f);
-        name.strip_suffix("::f").unwrap()
-    }}
-}
-
+/// Returns a [`ErrorPosition`] for the current line.
 macro_rules! errpos {
 
     () => {
-        
         ErrorPosition {
             file: Path::new(file!()).file_name() 
                 .and_then(|s| s.to_str())
                 .unwrap()
                 .to_string(),
-            function: function!().to_string(),
+            function: attain_function_name!().to_string(),
             line: line!(),
             column: column!()
         }
@@ -212,6 +248,17 @@ macro_rules! errpos {
 
 }
 
+/// Formats a `variable` such that its value, name and type
+/// are contained in the returned [`String`].
+/// # Example
+/// ```
+/// let i: i32 = 50;
+/// eprintln!(fmterr_val!(i));
+/// ```
+/// Outputs:
+/// ```none
+/// (bold 🔵) value (dimmed strikethrough) invar. (🟢) variable name of type (🟢) type
+/// ```
 macro_rules! fmterr_val {
 
     ($x:expr) => {
@@ -230,6 +277,18 @@ macro_rules! fmterr_val {
     };
 
 }
+
+/// Formats a `variable` such that its name and type
+/// are contained in the returned [`String`].
+/// # Example
+/// ```
+/// let i: i32 = 50;
+/// eprintln!(fmterr_val!(i));
+/// ```
+/// Outputs:
+/// ```none
+/// (dimmed strikethrough) invar. (🟢) variable name of type (🟢) type
+/// ```
 macro_rules! fmterr_name {
 
     ($x:expr) => {
@@ -264,6 +323,17 @@ macro_rules! fmterr_name {
 
 }
 
+/// Formats a `function` such that its name
+/// is stored in the returned [`String`].
+/// # Example
+/// ```
+/// let i: i32 = 50;
+/// eprintln!(fmterr_val!(i));
+/// ```
+/// Outputs:
+/// ```none
+/// (🟠) function name
+/// ```
 macro_rules! fmterr_func {
 
     ($x:expr) => {
@@ -274,6 +344,30 @@ macro_rules! fmterr_func {
 
 }
 
+/// Formats a error and the position listed as the source
+/// is the line, column & file from where `fmterr!` was called.
+/// # Argument
+/// - The first argument is a short-hand version of the error.
+/// - The second argument is a full description of the error.
+///   It can accept variadic arguments and
+///   uses `{}` for displaying them.
+/// 
+/// # Example
+/// ```
+/// eprintln!("{}", fmterr!(
+///     "No arguments found!",
+///     "
+///         No arguments were passed to cesty.
+///     "
+/// ));
+/// ```
+/// Outputs:
+/// ```none
+/// (dimmed ⚪) From (dimmed bold ⚪) file.rs...
+/// (dimmed ⚪) In (dimmed bold ⚪) foo at (dimmed bold ⚪) 13:37...
+/// (🔴)Error: (bold ⚪) No arguments found!
+///   (⚪)No arguments passed to cesty.
+/// ```
 #[allow(unused_macros)]
 macro_rules! fmterr {
 
@@ -292,7 +386,7 @@ macro_rules! fmterr {
                     .unwrap()
                     .bold(),
 
-                function!().bold(),
+                attain_function_name!().bold(),
                 format!("{}",line!()).bold(), 
                 format!("{}",column!()).bold()
             ).dimmed(),
@@ -320,6 +414,32 @@ macro_rules! fmterr {
     };
 }
 
+/// Formats a error and the position listed is given as the first
+/// argument.
+/// # Argument
+/// - The first argument the a [`ErrorPosition`].
+/// - The second argument is a short-hand version of the error.
+/// - The third argument is a full description of the error.
+///   It can accept variadic arguments and
+///   uses `{}` for displaying them.
+/// 
+/// # Example
+/// ```
+/// eprintln!("{}", fmtperr!(
+///     errpos!(),
+///     "No arguments found!",
+///     "
+///         No arguments were passed to cesty.
+///     "
+/// ));
+/// ```
+/// Outputs:
+/// ```none
+/// (dimmed ⚪) From (dimmed bold ⚪) file.rs...
+/// (dimmed ⚪) In (dimmed bold ⚪) foo at (dimmed bold ⚪) 13:37...
+/// (🔴)Error: (bold ⚪) No arguments found!
+///   (⚪)No arguments passed to cesty.
+/// ```
 macro_rules! fmtperr {
 
     ($pos:expr, $short:literal, $full:literal $(, $x:expr)*) => {
@@ -361,6 +481,7 @@ macro_rules! fmtperr {
 
 }
 
+/// Custom error return for cesty functions.
 macro_rules! reterr {
     ($t:expr $(,$vals:expr)*) => {
 

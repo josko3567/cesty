@@ -13,7 +13,27 @@ use std::path::Path;
 use colored::Colorize;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct YAMLInfo {
+pub struct ExtractYAMLCompilerAppend {
+    pub append: bool,
+    pub new:    String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum ExtractYAMLCompilerOption {
+    Truncate(String),
+    Append(ExtractYAMLCompilerAppend),
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ExtractYAMLCompiler {
+    pub name:      Option<ExtractYAMLCompilerOption>,
+    pub libraries: Option<ExtractYAMLCompilerOption>,
+    pub flags:     Option<ExtractYAMLCompilerOption>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ExtractYAMLInfo {
 
     pub standalone: Option<bool>,
     pub warn: Option<bool>,
@@ -22,7 +42,7 @@ pub struct YAMLInfo {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct YAMLTest {
+pub struct ExtractYAMLTest {
 
     pub name:   Option<String>,
     pub input:  Option<String>,
@@ -32,19 +52,19 @@ pub struct YAMLTest {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct YAML {
+pub struct ExtractYAML {
     
-    pub info: Option<YAMLInfo>,
-    pub objects: Option<Vec<String>>,
-    pub execute: Option<Vec<String>>,
-    pub test: Option<Vec<YAMLTest>>,
+    pub info: Option<ExtractYAMLInfo>,
+    pub prerun: Option<Vec<String>>,
+    pub test: Option<Vec<ExtractYAMLTest>>,
+    pub compiler: Option<ExtractYAMLCompiler>,
 
 }
 
 #[derive(Clone, Default)]
 pub struct Test {
     
-    pub yaml:     Vec<YAML>,
+    pub yaml:     Vec<ExtractYAML>,
     pub function: String,
     pub returns:  String,
     pub line:     u32,
@@ -103,7 +123,7 @@ enum CommentType {
 
 }
 
-fn parse_comment(comment: String) -> Option<Vec<YAML>> {
+fn parse_comment(comment: String) -> Option<Vec<ExtractYAML>> {
 
     let lines: Vec<&str> = comment
         .split_once("#!cesty;")?
@@ -192,13 +212,14 @@ fn parse_comment(comment: String) -> Option<Vec<YAML>> {
 
     }
 
-    let mut yamls: Vec<YAML> = vec![];
+    let mut yamls: Vec<ExtractYAML> = vec![];
     for c in comments {
         eprintln!("{}", c);
-        let r: YAML = match serde_yaml::from_str(c.as_str()){
+        let r: ExtractYAML = match serde_yaml::from_str(c.as_str()){
             Ok(res) => {res}
             Err(err) => {warn!("", "{}", fmterr_val!(err));continue}
         };
+        eprintln!("{:#?}", r);
         yamls.push(r);
     }
     Some(yamls)

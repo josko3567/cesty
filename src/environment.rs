@@ -68,28 +68,19 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
+/// A environment for placing `main()` into
+/// depending on the standalone value.
+/// 
+/// `full` contains the entire unaltered file.
+/// 
+/// `bodyclean` contains the entire file without function bodies.
+#[derive(Debug)]
 pub struct Environment {
     
     pub full:      String,
     pub bodyclean: String
     
 }
-
-// lazy_static!(
-//     /// ### pool of file environments.
-//     /// 
-//     /// Environments can depend on standalone switch,
-//     /// therefore we have environment.full which is 
-//     /// a copy of the file and environment.bodyclean
-//     /// which is a copy of the file without function bodies.
-//     #[allow(unused_variables)]
-//     #[allow(non_upper_case_globals)]
-//     pub static ref ENVIRONMENT_POOL: Mutex<HashMap<OsString, Environment>> = {
-//         let a = HashMap::new();
-//         Mutex::new(a)
-//     };
-// );
-
 
 pub(super) mod offset {
     
@@ -103,7 +94,7 @@ pub(super) mod offset {
     use clang_sys::*;
 
     #[derive(Debug, Clone)]
-    pub(super) enum SOption {
+    pub(super) enum Opt {
 
         PopAll,
         Push,
@@ -123,22 +114,22 @@ pub(super) mod offset {
     /// cursor, to find the end of the function block reverse find a '}' starting
     /// from end offset.
     /// ```
-    /// offset_stack(StackOption::New, None);
+    /// offset_stack(Opt::New, None);
     /// ```
     /// 
     /// # Example
     /// ```
     /// // Cleans the stack.
-    /// offset_stack(StackOption::New, None);
+    /// offset_stack(Opt::New, None);
     /// 
     /// // Push a new value:
-    /// offset_stack(StackOption::Push, Some((1,1)));
+    /// offset_stack(Opt::Push, Some((1,1)));
     /// 
     /// // Pop all values out of the stack as a vector:
-    /// let vec: Vector<(u32, u32)> = offset_stack(StackOption::PopAll, None);
+    /// let vec: Vector<(u32, u32)> = offset_stack(Opt::PopAll, None);
     /// ```
     pub(super) fn stack(
-        option: SOption,
+        option: Opt,
         input: Option<(u32, u32)>
     ) -> Option<Vec<(u32, u32)>> 
     { 
@@ -146,26 +137,26 @@ pub(super) mod offset {
             static ref OFFSETS: Mutex<Vec<(u32, u32)>> = Mutex::new(vec![]);
         );
         match option {
-            SOption::PopAll => {
+            Opt::PopAll => {
                 let tmp = OFFSETS.lock().unwrap().to_vec();
                 OFFSETS.lock().unwrap().clear();
                 return Some(tmp);
             },
-            SOption::Push => {
+            Opt::Push => {
                 _ = input.is_some_and(|x| {
                     OFFSETS.lock().unwrap().push(x); true
                 });
             },
-            SOption::New => {
+            Opt::New => {
                 // drop(OFFSETS);
                 OFFSETS.lock().unwrap().clear();
             },
-            SOption::PushStart => {
+            Opt::PushStart => {
                 _ = input.is_some_and(|offset_start|{
                     OFFSETS.lock().unwrap().push((offset_start.0, u32::MAX)); true
                 });
             },
-            SOption::PushEnd => {
+            Opt::PushEnd => {
                 _ = input.is_some_and(|offset_end|{
                     let a = OFFSETS.lock().unwrap().pop();
                     if a.is_some() {
@@ -181,6 +172,12 @@ pub(super) mod offset {
 
     }
 
+    /// Function that gets passed to [`clang_visitChildren`],
+    /// that extracts [`crate::Environment`] ranges into the
+    /// [`crate::offset::stack`] function.
+    /// After [`clang_visitChildren`] is finished you can extract all the
+    /// environment ranges from [`crate::offset::stack`] with 
+    /// `offset::Opt::PushAll`.
     #[allow(non_snake_case)]
     pub(super) extern "C" fn from_cursor(
 
@@ -190,12 +187,6 @@ pub(super) mod offset {
 
     ) -> i32 
     { unsafe {
-
-        // println!("Hello!");
-        // println!("{}",
-        //     CStr::from_ptr(clang_getCursorKindSpelling(ccur.kind).data as *const i8).to_string_lossy().to_string()
-
-        // );
         
         // Filter to find function bodies in current file.
         if clang_Location_isFromMainFile(
@@ -217,7 +208,6 @@ pub(super) mod offset {
         }
         else
         {
-        // println!("Hello!");
 
             let range = clang_getCursorExtent(ccur);
 
@@ -240,7 +230,7 @@ pub(super) mod offset {
                 std::ptr::addr_of_mut!(offset_end) as *mut c_uint
             );
 
-            stack(SOption::Push, Some((offset_start, offset_end)));
+            stack(Opt::Push, Some((offset_start, offset_end)));
 
             return CXChildVisit_Continue;
             
@@ -252,19 +242,14 @@ pub(super) mod offset {
 
 impl Environment {
 
-    pub fn from_lister_into_pool( 
+    /// Get a [`Environment`] from a [`ListerFile`].
+    pub fn from_lister( 
 
         file: &ListerFile,
         cur: CXCursor
         
     ) -> Result<Environment, Error> 
     { 
-
-        // if ENVIRONMENT_POOL.lock().unwrap().contains_key(&file.path) {
-        //     reterr!(Error::FileInPool,
-        //         file.path.clone().to_string_lossy().to_string()
-        //     );
-        // }
         
         let filestr = 
         match std::fs::read_to_string(Path::new(&file.path)) {
@@ -279,7 +264,7 @@ impl Environment {
             }
         };
     
-        offset::stack(offset::SOption::New, None);
+        offset::stack(offset::Opt::New, None);
             
         unsafe { clang_visitChildren(
             cur,
@@ -288,7 +273,7 @@ impl Environment {
         )};
 
         let mut stack = offset::stack(
-            offset::SOption::PopAll, 
+            offset::Opt::PopAll, 
             None
         ).unwrap();
 
@@ -307,14 +292,6 @@ impl Environment {
             full: filestr.to_owned(),
             bodyclean: clean.to_owned()
         })
-
-        // println!("{}", clean);
-        // stack.iter().for_each(|x| println!("{:?}", x));
-
-        // Ok(())
-
-        
-
 
     }
 

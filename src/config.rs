@@ -41,7 +41,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
             Self::NoConfigFile(pos) => {
-                if GLOBALS.read().unwrap().get_warn() { fmtwarnp!(pos,
+                if GLOBALS.read().unwrap().get_warn() { fmtpwarn!(pos,
                 "No config file was found.",
                 "
                     Proceeding with argument passed files.
@@ -210,7 +210,6 @@ impl Config {
         };
 
         let configCestyEmpty: ConfigCesty = ConfigCesty { 
-            // flags: None, 
             message: None,
             warn: None,
             metadata: Some(configCestyMetaDataEmpty), 
