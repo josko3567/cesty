@@ -10,7 +10,8 @@
  * @brief
  * returns a copy of the default book.
  * EXECUTING: file --> function --> num. yaml --> test name
- * <!-- #!cesty;
+ * <!-- 
+ * #!cesty;
  * ---  
  * info:
  *     standalone: true
@@ -29,15 +30,15 @@
  *       expect: true
  * 
  * prerun:
- *     - make -C ".."
+ *     - echo "hello"
  * 
  * compiler:
  *   name: gcc
  *   libraries: 
- *     append: true
+ *     append: false
  *     new: -lncursesw
  *   flags: 
- *     append: true
+ *     append: false
  *     new: -std=c11
  * ... 
  * --->

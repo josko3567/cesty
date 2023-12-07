@@ -55,14 +55,11 @@ mod translate;
 
 mod builder;
 
-#[allow(unused_variables)]
-fn main() -> Result<(), String> {
 
-    #[cfg(debug_assertions)]
-        env::set_var("RUST_BACKTRACE", "full");
+pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
 
     let mut args = match 
-        Argument::try_from_vec(&env::args().collect()) 
+        Argument::try_from_vec(argument) 
     {
 
         Ok(res) => {res}
@@ -73,28 +70,46 @@ fn main() -> Result<(), String> {
 
     };
 
+    let arg_recipe = args.iter().find(|a|{
+        match a {
+            Argument::Recipe(res) => {true}
+            _ => {false}
+        }
+    });
+
+    let recipe = if arg_recipe.is_some() {
+        match arg_recipe.unwrap() {
+            Argument::Recipe(name) => {Some(name.clone())}
+            _ => {Some("".to_string())}
+        }
+    } else {
+        None
+    };
+
     let mut conf: Config = Config::new();
 
     match conf.from_file(config::find()) {
 
         Err(err) => { 
             
-            eprintln!("{}", err);
             match err {
                 config::Error::NoConfigFile(_) => {}
-                _ => {return Err(err.code())}
+                _ => {
+                    eprintln!("{}", err);
+                    return Err(err.code())
+                }
             }
         
         }
         _ => {}
         
     }
-    
+
     conf.merge_overrides(&args);
 
     // println!("{:#?}", conf);
     // args.iter().for_each(|x| x.print());
-    
+
     let files = 
     match lister::get_list(&conf, &args) {
         Ok(list) => {list},
@@ -166,27 +181,11 @@ fn main() -> Result<(), String> {
             }
         };
 
-        let arg_recipe = args.iter().find(|a|{
-            match a {
-                Argument::Recipe(res) => {true}
-                _ => {false}
-            }
-        });
-
-        let recipe = if arg_recipe.is_some() {
-            match arg_recipe.unwrap() {
-                Argument::Recipe(name) => {Some(name.clone())}
-                _ => {Some("".to_string())}
-            }
-        } else {
-            None
-        };
-
         ext.tests.iter().for_each(|test|{
 
             test.yaml.iter().for_each(|yaml|{
 
-                _ = builder::build_test(recipe.clone(), &conf, yaml, &env)
+                _ = builder::build_test(recipe.clone(), &conf, &ext, yaml, &env)
 
             })
 
@@ -200,7 +199,20 @@ fn main() -> Result<(), String> {
     }
 
     // println!("{}", GLOBALS.read().unwrap().get_message_amount());
-    
+
     Ok(())
+
+
+}
+
+#[allow(unused_variables)]
+fn main() -> Result<(), String> {
+
+    #[cfg(debug_assertions)]
+        env::set_var("RUST_BACKTRACE", "full");
+
+    let res = cesty(&env::args().collect());
+    println!("{}", env::current_dir().unwrap().as_path().to_str().unwrap());
+    res
 
 }

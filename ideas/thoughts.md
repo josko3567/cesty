@@ -306,7 +306,7 @@ compiler:
 
 
 
-## How `cesty` works
+## How `cesty` works V1
 
 ```mermaid
 flowchart TB;
@@ -377,4 +377,106 @@ flowchart TB;
     confexists-->|Yes?|useconf-->output
 
     output-->end_
+```
+
+## How `cesty` works V2
+
+```mermaid
+flowchart TB;
+    start_user_input[foo@bar $ cesty -w -mm all --compiler.name=gcc]
+
+    argument_parser[argument.rs]
+    argument_database[(Vector of Argument)]
+    recipe[(Argument with 
+    Recipe name.)]
+
+    config_parser[config.rs]
+    config_database[(struct Config)]
+
+    lister[lister.rs]
+    file_database[(Vector of ListerFile)]
+
+    clang[clang.rs]
+
+    extract[extract.rs]
+    extract_database[(struct Extract)]
+
+    environment[environment.rs]
+    environment_database[(struct Environment)]
+
+    builder[builder.rs]
+
+    runner[runner.rs]
+
+    finish[/Compare and return results./]
+
+    start_user_input-->|Input official argument
+    properties into a table
+    prior to parsing any
+    string as a Argument.
+    |argument_parser
+
+    argument_parser-->|Attempt to parse 
+    user arguments and return
+    them as a Vector of 
+    Argument.
+    |argument_database-->lister & recipe
+    
+    argument_database-->|Input overrides into
+    the found or default
+    config.
+    |config_parser
+
+    config_parser-->|Attempt to find
+    & parse the cesty
+    config. Otherwise return 
+    a default config.
+    |config_database-->lister
+
+    lister-->|Try to create a list of all
+    files to be parsed for cesty test comments.
+    From recipe defined in the config that is
+    mentioned in the arguments and/or files
+    listed through arguments.
+    |file_database-->|Done for each individual
+    ListerFile.
+    |clang-->|Using libclang parse
+    a file pointed inside of
+    ListerFile into a AST.
+    |extract & environment
+
+    extract-->|Extract all tests found in
+    documentation comments 
+    for functions. List extra
+    details like the filename,
+    function name, column, line,
+    etc...
+    |extract_database
+
+    environment-->|"Extract environments
+    for our main functions.
+    There are 2 environments,
+    one with everything in the
+    file (copy of the file) &
+    a environment without
+    function bodies.
+    "|environment_database
+
+    environment_database & extract_database & recipe & config_database-->builder-->|Creates a new file for
+    each test found in Extract for
+    all ListerFile's. All files contain
+    a comment at the start for a way
+    to create their executable &
+    the test code.
+    |runner-->|Runs all the tests and saves
+    the results.
+    |finish
+
+
+
+    
+
+
+    
+
 ```

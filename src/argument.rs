@@ -28,6 +28,7 @@ pub enum Error {
     //                File, func, line...|New bin name
     RenamedExecutable(ErrorPosition, String),
     NoArguments(ErrorPosition),
+    InvalidPWD(ErrorPosition, String),
     //                             Argument name, Similar
     UnknownArgument(ErrorPosition, String, String),
     //                               Arg/Ovr name|Propr name|Reason
@@ -55,6 +56,18 @@ impl Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
+            Self::InvalidPWD(pos, name) => {
+                fmtperr!(pos,
+                    "Path for PWD is invalid!",
+                    "
+                        Path passed to {}...
+                            {}
+                        was not found, be sure the path
+                        exists and it's the full path.
+                    ",
+                        fmterr_val!("-pwd"),
+                        name
+                )}
             Self::RenamedExecutable(pos, name) => {
                 fmtperr!(pos,
                 "Renamed executable!",
@@ -316,6 +329,13 @@ pub enum Argument {
         start          ="-"
     ))]
     Warnings,
+
+    #[strum(props(
+        position ="0",
+        body     ="-pwd",
+        start    ="-"
+    ))]
+    PWD(String),
 
     // The very existence of the prop ignore makes it ignore this value
     #[strum(props(ignore="true"))]
@@ -1070,7 +1090,7 @@ impl Argument {
         value:    &str,
         full:     &str,
         iter:     Option<&mut Peekable<std::slice::Iter<String>>>
-    ) -> Self {
+    ) -> Result<Self, self::Error> {
 
         match arg
         {
@@ -1082,29 +1102,29 @@ impl Argument {
                     while let Some(item) = uniter.next() {
                         arr.push(item.clone());
                     }
-                    Self::Files(arr)
+                    Ok(Self::Files(arr))
                 }
                 else 
                 {
-                    Self::Files(vec![])
+                    Ok(Self::Files(vec![]))
                 }
             }
             Self::Overrides(over) => { match over {
                 Override::CompilerFlags(_) => {
-                    Self::Overrides(Override::CompilerFlags(String::from(value)))
+                    Ok(Self::Overrides(Override::CompilerFlags(String::from(value))))
                 }
                 Override::CompilerLibraries(_) => {
-                    Self::Overrides(Override::CompilerLibraries(String::from(value)))
+                    Ok(Self::Overrides(Override::CompilerLibraries(String::from(value))))
                 }
                 Override::CompilerName(_) => {
-                    Self::Overrides(Override::CompilerName(String::from(value)))
+                    Ok(Self::Overrides(Override::CompilerName(String::from(value))))
                 }
                 Override::Unknown(_) => {
-                    Self::Overrides(Override::Unknown((
+                    Ok(Self::Overrides(Override::Unknown((
                         String::from(name), 
                         String::from(value),
                         String::from(full)
-                    )))
+                    ))))
                 }
             }}
             Self::MessageAmount(_) => {
@@ -1115,35 +1135,49 @@ impl Argument {
                             globals::Degree::from(&value.chars().next().unwrap()),
                             globals::AccessLevel::from_filename(filename!())
                         );
-                        Argument::MessageAmount(res.to_owned())
+                        Ok(Argument::MessageAmount(res.to_owned()))
                     }
-                    None => {Argument::Unknown((
+                    None => {Ok(Argument::Unknown((
                         String::from(name), 
                         String::from(value),
                         String::from(full)
-                    ))}
+                    )))}
                 }
             }
             Self::Recipe(_) => {
-                Argument::Recipe(String::from(full))
+                Ok(Argument::Recipe(String::from(full)))
             }
             Self::PrintInstructions => {
-                Argument::PrintInstructions
+                Ok(Argument::PrintInstructions)
             }
             Self::Warnings => {
                 GLOBALS.write().unwrap().set_warn(
                     true, 
                     globals::AccessLevel::from_filename(filename!())
                 );
-                // eprintln!("{:#?}", globals::AccessLevel::from_filename(filename!()));
-                Argument::Warnings
+                Ok(Argument::Warnings)
+            }
+            Self::PWD(_) => {
+                if iter.is_some() {
+                    let uniter = iter.unwrap();
+                    if uniter.peek().is_none() {
+                        reterr!(Error::InvalidPWD, String::from("\"\""));
+                    }
+                    let strpath = uniter.next().unwrap();
+                    if std::env::set_current_dir(&Path::new(strpath)).is_err() {
+                        reterr!(Error::InvalidPWD, format!("\"{}\"", strpath.to_owned()));
+                    }
+                    return Ok(Argument::PWD(strpath.to_owned()))
+                }
+                reterr!(Error::InvalidPWD, String::from("\"\""));
+                
             }
             Self::Unknown(_) => {
-                Argument::Unknown((
+                Ok(Argument::Unknown((
                     String::from(name), 
                     String::from(value),
                     String::from(full)
-                ))
+                )))
             }
         }
 
@@ -1340,13 +1374,14 @@ impl Argument {
             ""
         };
 
-        Ok(Argument::from_parts(
+        Argument::from_parts(
             &bucket.0, 
             &bucket.1,
             name.as_str(), 
             arg_val, 
             s.clone().as_str(),
-            it))
+            it
+        )
 
     }
 
