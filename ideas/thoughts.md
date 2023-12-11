@@ -385,6 +385,15 @@ flowchart TB;
 flowchart TB;
     start_user_input[foobar $ cesty ...]
 
+
+
+
+    
+
+
+    
+
+```
     argument_parser[argument.rs]
     argument_database[(Vector of Argument)]
     recipe[(Argument with 
@@ -445,15 +454,6 @@ flowchart TB;
     a environment without
     function bodies."|environment_database
 
-
-
-
-    
-
-
-    
-
-```
     lister-->|Try to create a list of all
     files to be parsed for cesty test comments.
     From recipe defined in the config that is
