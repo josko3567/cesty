@@ -383,7 +383,7 @@ flowchart TB;
 
 ```mermaid
 flowchart TB;
-    start_user_input[foo@bar $ cesty -w -mm all --compiler.name=gcc]
+    start_user_input[foo@bar $ cesty ...]
 
     argument_parser[argument.rs]
     argument_database[(Vector of Argument)]
@@ -429,14 +429,6 @@ flowchart TB;
     config. Otherwise return 
     a default config.|config_database-->lister
 
-    lister-->|Try to create a list of all
-    files to be parsed for cesty test comments.
-    From recipe defined in the config that is
-    mentioned in the arguments and/or files
-    listed through arguments.|file_database-->|Done for each
-    individual ListerFile.|clang-->|Using libclang parse
-    a file pointed inside of
-    ListerFile into a AST.|extract & environment
 
     extract-->|Extract all tests found in
     documentation comments 
@@ -453,13 +445,6 @@ flowchart TB;
     a environment without
     function bodies."|environment_database
 
-    environment_database & extract_database & recipe & config_database-->builder-->|Creates a new file for
-    each test found in Extract for
-    all ListerFile's. All files contain
-    a comment at the start for a way
-    to create their executable &
-    the test code.|runner-->|Runs all the tests and saves
-    the results.|finish
 
 
 
@@ -469,3 +454,19 @@ flowchart TB;
     
 
 ```
+    lister-->|Try to create a list of all
+    files to be parsed for cesty test comments.
+    From recipe defined in the config that is
+    mentioned in the arguments and/or files
+    listed through arguments.|file_database-->|Done for each
+    individual ListerFile.|clang-->|Using libclang parse
+    a file pointed inside of
+    ListerFile into a AST.|extract & environment
+
+    environment_database & extract_database & recipe & config_database-->builder-->|Creates a new file for
+    each test found in Extract for
+    all ListerFile's. All files contain
+    a comment at the start for a way
+    to create their executable &
+    the test code.|runner-->|Runs all the tests and saves
+    the results.|finish
