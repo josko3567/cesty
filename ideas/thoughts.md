@@ -385,8 +385,8 @@ flowchart TB;
 flowchart TB;
     start_user_input[foobar $ cesty ...]
 
-    argument_parser[argument.rs]
-    argument_database[(Vector of Argument)]
+    argumentparser[argument.rs]
+    argumentdatabase[(Vector of Argument)]
     recipe[(Argument with 
     Recipe name.)]
 
