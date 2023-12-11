@@ -383,14 +383,22 @@ flowchart TB;
 
 ```mermaid
 flowchart TB;
-    start_user_input[foobar $ cesty ...]
+    startuserinput[foobar $ cesty ...]
 
     argumentparser[argument.rs]
     argumentdatabase[(Vector of Argument)]
     recipe[(Argument with 
     Recipe name.)]
 
+    startuserinput-->|Input official argument
+    properties into a table
+    prior to parsing any
+    string as a Argument.|argumentparser
 
+    argumentparser-->|Attempt to parse 
+    user arguments and return
+    them as a Vector of 
+    Argument.|argumentdatabase-->lister & recipe
 
     
 
@@ -418,16 +426,6 @@ flowchart TB;
     runner[runner.rs]
 
     finish[/Compare and return results./]
-
-    start_user_input-->|Input official argument
-    properties into a table
-    prior to parsing any
-    string as a Argument.|argument_parser
-
-    argument_parser-->|Attempt to parse 
-    user arguments and return
-    them as a Vector of 
-    Argument.|argument_database-->lister & recipe
     
     argument_database-->|Input overrides into
     the found or default
