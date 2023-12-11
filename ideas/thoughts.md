@@ -383,7 +383,7 @@ flowchart TB;
 
 ```mermaid
 flowchart TB;
-    start_user_input[foo@bar $ cesty ...]
+    start_user_input[foobar $ cesty ...]
 
     argument_parser[argument.rs]
     argument_database[(Vector of Argument)]
