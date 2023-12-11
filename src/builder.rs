@@ -3,14 +3,15 @@ use crate::{
     filegroup::FileGroup,
     globals::GLOBALS,
     config::Config,
-    extract::{Extract, self, ExtractYAML},
+    extract::{Extract, self, ExtractYAML, Test},
     environment::Environment, argument::Argument,
 };
 
 use std::{
     fmt::Display,
-    path::Path
+    path::Path, ffi::OsString,
 };
+use rand::{distributions::Alphanumeric, Rng};
 
 use colored::Colorize;
 use indoc::formatdoc;
@@ -258,6 +259,26 @@ mod picker {
 
 }
 
+fn matching_filename(function_name: &String) -> OsString {
+
+    let parts = function_name.split_once('(');
+    let name = if parts.is_some() {
+        parts.unwrap().0
+    } else {
+        function_name
+    };
+
+    Path::new(&format!("{}_f{}",
+        name,
+        rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect::<String>()
+    )).as_os_str().to_os_string()
+
+}
+
 /* HOW A FILE SHOULD LOOK
 
 /// {prerun} {compiler.name} {compiler.flags} file.c -o file.out {compiler.libraries} 
@@ -285,6 +306,7 @@ pub fn build_test(
     recipe:       Option<String>,
     config:       &Config,
     extract:      &Extract,
+    test:         &Test,
     extract_yaml: &ExtractYAML,
     environment:  &Environment,
 
@@ -316,15 +338,21 @@ pub fn build_test(
     let compiler_name:      String = picker::compiler_name(config, extract_yaml);
     let compiler_flags:     String = picker::compiler_flags(config, extract_yaml);
     let compiler_libraries: String = picker::compiler_libraries(config, extract_yaml);
+    
+    let filename = matching_filename(&test.function).to_string_lossy().to_string();
 
+    let fullpath = std::env::current_dir().unwrap().as_path();
     
 
-    println!("{} {} {} CUM.c -o POOP.out {}", 
+    println!("{}{} {} {}.c -o {}.out {}", 
         runtest.exec, 
         compiler_name,
         compiler_flags,
+        &filename,
+        &filename,
         compiler_libraries
     );
+
 
     // let compiler_flags: String = picker
 

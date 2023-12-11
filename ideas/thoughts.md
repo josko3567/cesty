@@ -413,45 +413,37 @@ flowchart TB;
     start_user_input-->|Input official argument
     properties into a table
     prior to parsing any
-    string as a Argument.
-    |argument_parser
+    string as a Argument.|argument_parser
 
     argument_parser-->|Attempt to parse 
     user arguments and return
     them as a Vector of 
-    Argument.
-    |argument_database-->lister & recipe
+    Argument.|argument_database-->lister & recipe
     
     argument_database-->|Input overrides into
     the found or default
-    config.
-    |config_parser
+    config.|config_parser
 
     config_parser-->|Attempt to find
     & parse the cesty
     config. Otherwise return 
-    a default config.
-    |config_database-->lister
+    a default config.|config_database-->lister
 
     lister-->|Try to create a list of all
     files to be parsed for cesty test comments.
     From recipe defined in the config that is
     mentioned in the arguments and/or files
-    listed through arguments.
-    |file_database-->|Done for each individual
-    ListerFile.
-    |clang-->|Using libclang parse
+    listed through arguments.|file_database-->|Done for each
+    individual ListerFile.|clang-->|Using libclang parse
     a file pointed inside of
-    ListerFile into a AST.
-    |extract & environment
+    ListerFile into a AST.|extract & environment
 
     extract-->|Extract all tests found in
     documentation comments 
     for functions. List extra
     details like the filename,
     function name, column, line,
-    etc...
-    |extract_database
+    etc...|extract_database
 
     environment-->|"Extract environments
     for our main functions.
@@ -459,18 +451,15 @@ flowchart TB;
     one with everything in the
     file (copy of the file) &
     a environment without
-    function bodies.
-    "|environment_database
+    function bodies."|environment_database
 
     environment_database & extract_database & recipe & config_database-->builder-->|Creates a new file for
     each test found in Extract for
     all ListerFile's. All files contain
     a comment at the start for a way
     to create their executable &
-    the test code.
-    |runner-->|Runs all the tests and saves
-    the results.
-    |finish
+    the test code.|runner-->|Runs all the tests and saves
+    the results.|finish
 
 
 

@@ -1,5 +1,6 @@
 #[macro_use]
 mod error;
+use builder::RunnableTest;
 #[allow(unused_imports)]
 use error::*;
 #[allow(unused_imports)]
@@ -50,13 +51,13 @@ use crate::extract::*;
 mod environment;
 use crate::environment::*;
 
-#[allow(dead_code)]
-mod translate;
-
 mod builder;
 
 
 pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
+
+
+    // return Ok(());
 
     let mut args = match 
         Argument::try_from_vec(argument) 
@@ -70,13 +71,15 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
 
     };
 
+    
+    
     let arg_recipe = args.iter().find(|a|{
         match a {
-            Argument::Recipe(res) => {true}
+            Argument::Recipe(_) => {true}
             _ => {false}
         }
     });
-
+    
     let recipe = if arg_recipe.is_some() {
         match arg_recipe.unwrap() {
             Argument::Recipe(name) => {Some(name.clone())}
@@ -85,33 +88,35 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
     } else {
         None
     };
-
-    let mut conf: Config = Config::new();
-
-    match conf.from_file(config::find()) {
-
+    
+    let mut config: Config = Config::new();
+    
+    match config.from_file(config::find()) {
+        
         Err(err) => { 
             
             match err {
-                config::Error::NoConfigFile(_) => {}
+                config::Error::NoConfigFile(_) => {
+                    if GLOBALS.read().unwrap().get_warn() {
+                        eprintln!("{}", err)
+                    }
+                }
                 _ => {
                     eprintln!("{}", err);
                     return Err(err.code())
                 }
             }
-        
+            
         }
         _ => {}
         
     }
-
-    conf.merge_overrides(&args);
-
-    // println!("{:#?}", conf);
-    // args.iter().for_each(|x| x.print());
-
+    
+    config.merge_overrides(&args);
+    
+    
     let files = 
-    match lister::get_list(&conf, &args) {
+    match lister::get_list(&config, &args) {
         Ok(list) => {list},
         Err(err) => {
             eprintln!("{err}"); 
@@ -128,49 +133,16 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
                 return Err(err.code());
             }
         };
+
+        // return Ok(());
             
 
-        let ext = Extract::from_lister(
+        let extract = Extract::from_lister(
             &file, 
             clang.cur.clone()
         );
-        // {
-        //     Ok(res) => {res}
-        //     Err(err) => { match err {
-        //         ExtractError::NothingToExtract(file) => {
-        //             Extract::default()
-        //         },
-        //         _ => {
-        //             eprintln!("{}", err);
-        //             return Err(err.code());
-        //         }
-        //     }}
-        // };
 
-
-
-        // println!("{:#?}:\n",  
-        //     &res.filepath
-        // );
-
-        // res.tests.iter().for_each(|x| {
-        //     println!(
-        //         "{} {}\n\n{}:{}",
-        //         x.returns,
-        //         x.function,
-        //         x.line,
-        //         x.column
-        //     );
-        //     x.yaml.iter().for_each(|x| println!(
-        //         "---\n\
-        //         {:#?}\
-        //         ...\n",
-        //         x
-        //     ))
-        // });
-
-
-        let env = match Environment::from_lister(
+        let environment = match Environment::from_lister(
             &file, 
             clang.cur.clone())
         {
@@ -181,27 +153,43 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
             }
         };
 
-        ext.tests.iter().for_each(|test|{
+        let mut runnable_tests: Vec<RunnableTest> = vec![];
 
-            test.yaml.iter().for_each(|yaml|{
+        for test in extract.tests.iter() {
 
-                _ = builder::build_test(recipe.clone(), &conf, &ext, yaml, &env)
+            for extract_yaml in test.yaml.iter() {
 
-            })
+                 match builder::build_test(
+                    recipe.clone(), 
+                    &config,
+                    &extract, 
+                    test,
+                    extract_yaml, 
+                    &environment
+                ) {
 
-        });
+                    Ok(opt) => {
+                        match opt {
+                            Some(res) => {runnable_tests.push(res)}
+                            _ => {}
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("{}", err);
+                        return Err(err.code());
+                    }
 
-        // println!("\n---------------\n{}\n", env.full);
-        // println!("\n---------------\n{}\n", env.bodyclean);
-        
+                }
+
+            }
+
+        }
+
         clang.close();
 
     }
 
-    // println!("{}", GLOBALS.read().unwrap().get_message_amount());
-
     Ok(())
-
 
 }
 
@@ -211,7 +199,7 @@ fn main() -> Result<(), String> {
     #[cfg(debug_assertions)]
         env::set_var("RUST_BACKTRACE", "full");
 
-    let res = cesty(&env::args().collect());
+    let res = cesty(&env::args().skip(1).collect());
     println!("{}", env::current_dir().unwrap().as_path().to_str().unwrap());
     res
 

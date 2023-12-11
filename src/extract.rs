@@ -36,8 +36,8 @@ pub struct ExtractYAMLCompiler {
 pub struct ExtractYAMLInfo {
 
     pub standalone: Option<bool>,
-    pub warn: Option<bool>,
-    pub run: Option<bool>
+    pub warn:       Option<bool>,
+    pub run:        Option<bool>
 
 }
 
@@ -54,9 +54,9 @@ pub struct ExtractYAMLTest {
 #[derive(Debug, Deserialize, Clone)]
 pub struct ExtractYAML {
     
-    pub info: Option<ExtractYAMLInfo>,
-    pub prerun: Option<Vec<String>>,
-    pub test: Option<Vec<ExtractYAMLTest>>,
+    pub info:     Option<ExtractYAMLInfo>,
+    pub prerun:   Option<Vec<String>>,
+    pub test:     Option<Vec<ExtractYAMLTest>>,
     pub compiler: Option<ExtractYAMLCompiler>,
 
 }
@@ -257,8 +257,6 @@ extern "C" fn extract_from_cursor(
         ccur
     );
 
-    
-    
     let ccur_tyspell = clang_getTypeSpelling(
         clang_getResultType(
             clang_getCursorType(ccur)

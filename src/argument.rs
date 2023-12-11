@@ -1,5 +1,4 @@
 use crate::{
-    config::Config,
     error::ErrorPosition,
     filegroup::FileGroup,
     globals::{GLOBALS, self}
@@ -10,7 +9,7 @@ use std::{
     path::Path, 
     sync::Mutex, 
     collections::HashMap,
-    iter::{Enumerate, Peekable}, ops::Deref,
+    iter::Peekable, ops::Deref,
 };
 
 use indoc::formatdoc;
@@ -62,11 +61,16 @@ impl Display for Error {
                     "
                         Path passed to {}...
                             {}
-                        was not found, be sure the path
-                        exists and it's the full path.
+                        ...was either:
+                            Not found,
+                            {} couldn't change the path due to insufficient privileges.
+                        Be sure that the path exists and that it's a full path.
+                        Also be sure to run with {} if everything is alright.
                     ",
                         fmterr_val!("-pwd"),
-                        name
+                        fmterr_val!(name),
+                        fmterr_func!(std::env::set_current_dir()),
+                        fmterr_func!(sudo)
                 )}
             Self::RenamedExecutable(pos, name) => {
                 fmtperr!(pos,
@@ -1169,8 +1173,7 @@ impl Argument {
                     }
                     return Ok(Argument::PWD(strpath.to_owned()))
                 }
-                reterr!(Error::InvalidPWD, String::from("\"\""));
-                
+                reterr!(Error::InvalidPWD, String::from("\"\""));              
             }
             Self::Unknown(_) => {
                 Ok(Argument::Unknown((
@@ -1413,11 +1416,11 @@ impl Argument {
     ///     ]
     /// )
     /// ```
-    pub fn try_from_vec(v: &Vec<String>) -> Result<Vec<Self>, self::Error> {
+    pub fn try_from_vec(vector: &Vec<String>) -> Result<Vec<Self>, self::Error> {
         
-        let mut iter: Peekable<std::slice::Iter<'_, String>> = v.into_iter().peekable();
+        let mut iter: Peekable<std::slice::Iter<'_, String>> = vector.into_iter().peekable();
         let mut args: Vec<Self> = vec![];
-        iter.next();
+        // iter.next();
         
         while let Some(chunk) = iter.next(){
 
@@ -1432,9 +1435,5 @@ impl Argument {
         Ok(args)
 
     }
-
-    // pub fn try_from_config(v: &Config) {
-
-    // }
 
 }

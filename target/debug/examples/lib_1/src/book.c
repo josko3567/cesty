@@ -35,15 +35,15 @@
  * compiler:
  *   name: gcc
  *   libraries: 
- *     append: false
+ *     append: true
  *     new: -lncursesw
  *   flags: 
- *     append: false
+ *     append: true
  *     new: -std=c11
  * ... 
  * --->
  */
-struct innerbook my_book()
+struct innerbook my_book(int a, int b, char a[static 1])
 {
 	int foobar(int i) {
 		return i+2;

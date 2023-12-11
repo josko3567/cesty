@@ -12,7 +12,7 @@ use serde_yaml;
 use std::{
     fs::File, 
     path::Path,
-    fmt::Display
+    fmt::Display, ffi::OsString
 };
 
 use indoc::formatdoc;
@@ -126,7 +126,7 @@ pub struct ConfigRecipe {
 pub struct Config {
 
     #[serde(skip_deserializing)]
-    pub path:     String,
+    pub path:     OsString,
 
     pub cesty:    Option<ConfigCesty>,
     pub compiler: Option<ConfigCompiler>,
@@ -148,7 +148,7 @@ pub struct Config {
 /// // in that folder.
 /// assert_eq!(find_config(), "/home/foobar/bar/.cesty.yaml");
 /// ```
-pub fn find() -> Option<String> {
+pub fn find() -> Option<OsString> {
  
     let names = [
 
@@ -175,8 +175,8 @@ pub fn find() -> Option<String> {
             cfp_clone.push(Path::new(name));
 
             let test_path = cfp_clone
-                .to_string_lossy()
-                .to_string();
+                .as_os_str()
+                .to_os_string();
 
             if Path::new(&test_path).is_file() {
                 
@@ -224,7 +224,7 @@ impl Config {
 
         Config {
 
-            path: String::from(""),
+            path: OsString::from(""),
             cesty: Some(configCestyEmpty),
             compiler: Some(configCompilerEmpty),
             recipe: None
@@ -286,7 +286,7 @@ impl Config {
     ///     _ => {}
     /// }
     /// ```
-    pub fn from_file(&mut self, file: Option<String>) -> Result<(), Error> {
+    pub fn from_file(&mut self, file: Option<OsString>) -> Result<(), Error> {
 
         let filepure = match file {
             Some(pure) => {pure}
@@ -312,7 +312,7 @@ impl Config {
             Err(err) => {reterr!(Error::SerdeError, err.to_string())}
         };
 
-        self.path = String::from(filepure);
+        self.path = filepure.to_owned();
         self.set_globals();
         
         Ok(())

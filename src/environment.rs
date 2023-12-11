@@ -5,15 +5,10 @@ use crate::{
 };
 
 use std::{
-    fmt::Display,
-    // error::Error,
-    collections::HashMap, 
-    sync::Mutex,
-    ffi::OsString, 
+    fmt::Display, 
     ptr::null_mut, path::Path,
 };
 
-use lazy_static::lazy_static;
 use colored::Colorize;
 use indoc::formatdoc;
 use clang_sys::*;
