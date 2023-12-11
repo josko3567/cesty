@@ -360,18 +360,9 @@ flowchart TB;
 
     argumentparser[argument.rs]
     argumentdatabase[(Vector of Argument)]
-    recipe[(Argument with 
-    Recipe name.)]
+    recipe[(Argument with \n Recipe name.)]
 
-    startuserinput-->|Input official argument
-    properties into a table
-    prior to parsing any
-    string as a Argument.|argumentparser
-
-    argumentparser-->|Attempt to parse 
-    user arguments and return
-    them as a Vector of 
-    Argument.|argumentdatabase-->lister & recipe
+    startuserinput-->|Input official argument\n properties \n into a table\n prior to parsing any\n string as a Argument.|argumentparser
 
     
 
