@@ -385,6 +385,10 @@ flowchart TB;
 flowchart TB;
     start_user_input[foobar $ cesty ...]
 
+    argument_parser[argument.rs]
+    argument_database[(Vector of Argument)]
+    recipe[(Argument with 
+    Recipe name.)]
 
 
 
@@ -394,10 +398,6 @@ flowchart TB;
     
 
 ```
-    argument_parser[argument.rs]
-    argument_database[(Vector of Argument)]
-    recipe[(Argument with 
-    Recipe name.)]
 
     config_parser[config.rs]
     config_database[(struct Config)]
