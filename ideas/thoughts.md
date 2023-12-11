@@ -415,14 +415,15 @@ flowchart TB;
     
     argument_database-->|Input overrides into\n the found or default\n config.|config_parser
 
+
+
+
+
+
+```
     config_parser-->|Attempt to find\n & parse the cesty\n config. Otherwise return \n a default config.|config_database-->lister
-
     lister-->|Try to create a list of all\n files to be parsed for cesty test comments.\n From recipe defined in the config that is\n mentioned in the arguments and/or files\n listed through arguments.|file_database-->|Done for each\n individual ListerFile.|clang-->|Using libclang parse\n a file pointed inside of\n ListerFile into a AST.|extract & environment
-
     extract-->|Extract all tests found in\n documentation comments \n for functions. List extra\n details like the filename,\n function name, column, line,\n etc...|extract_database
-
     environment-->|"Extract environments\n for our main functions.\n There are 2 environments,\n one with everything in the\n file (copy of the file) &\n a environment without\n function bodies."|environment_database
 
     environment_database & extract_database & recipe & config_database-->builder-->|Creates a new file for\n each test found in Extract for\n all ListerFile's. All files contain\n a comment at the start for a way\n to create their executable &\n the test code.|runner-->|Runs all the tests and saves\n the results.|finish
-
-```
