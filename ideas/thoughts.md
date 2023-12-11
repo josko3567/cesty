@@ -352,33 +352,6 @@ flowchart TB;
     result-->|No?|resultgood
 ```
 
-### `mod lister;`
-
-```mermaid
-flowchart TB;
-    start([Run...])
-    arguments[/let cestyconf: Yaml? \n let pwd: String/]
-    confexists{.cesty.conf \n exists?}
-    argexists{Are there any \n file arguments?}
-    useconf[Use all files \n listed in the config.]
-    usepwd[Use all files \n in the pwd.]
-    usearg[Use argument files.]
-    output[/return Vec of Strings containing filenames./]
-    end_([End...])
-
-
-
-    start-->arguments-->argexists
-
-    argexists-->|No?|confexists
-    argexists-->|Yes?|usearg-->output
-
-    confexists-->|No?|usepwd-->output
-    confexists-->|Yes?|useconf-->output
-
-    output-->end_
-```
-
 ## How `cesty` works V2
 
 ```mermaid
