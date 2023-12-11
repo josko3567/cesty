@@ -352,24 +352,42 @@ flowchart TB;
     result-->|No?|resultgood
 ```
 
+### `mod lister;`
+
+```mermaid
+flowchart TB;
+    start([Run...])
+    arguments[/let cestyconf: Yaml? \n let pwd: String/]
+    confexists{.cesty.conf \n exists?}
+    argexists{Are there any \n file arguments?}
+    useconf[Use all files \n listed in the config.]
+    usepwd[Use all files \n in the pwd.]
+    usearg[Use argument files.]
+    output[/return Vec of Strings containing filenames./]
+    end_([End...])
+
+
+
+    start-->arguments-->argexists
+
+    argexists-->|No?|confexists
+    argexists-->|Yes?|usearg-->output
+
+    confexists-->|No?|usepwd-->output
+    confexists-->|Yes?|useconf-->output
+
+    output-->end_
+```
+
 ## How `cesty` works V2
 
 ```mermaid
 flowchart TB;
-    startuserinput[foobar $ cesty ...]
+    start_user_input[foo@bar $ cesty -w -mm all --compiler.name=gcc]
 
-    argumentparser[argument.rs]
-    argumentdatabase[(Vector of Argument)]
+    argument_parser[argument.rs]
+    argument_database[(Vector of Argument)]
     recipe[(Argument with \n Recipe name.)]
-
-    startuserinput-->|Input official argument\n properties \n into a table\n prior to parsing any\n string as a Argument.|argumentparser
-
-    
-
-
-    
-
-```
 
     config_parser[config.rs]
     config_database[(struct Config)]
@@ -390,45 +408,21 @@ flowchart TB;
     runner[runner.rs]
 
     finish[/Compare and return results./]
+
+    start_user_input-->|Input official argument\n properties into a table\n prior to parsing any\n string as a Argument.|argument_parser
+
+    argument_parser-->|Attempt to parse \n user arguments and return\n them as a Vector of \n Argument.|argument_database-->lister & recipe
     
-    argument_database-->|Input overrides into
-    the found or default
-    config.|config_parser
+    argument_database-->|Input overrides into\n the found or default\n config.|config_parser
 
-    config_parser-->|Attempt to find
-    & parse the cesty
-    config. Otherwise return 
-    a default config.|config_database-->lister
+    config_parser-->|Attempt to find\n & parse the cesty\n config. Otherwise return \n a default config.|config_database-->lister
 
+    lister-->|Try to create a list of all\n files to be parsed for cesty test comments.\n From recipe defined in the config that is\n mentioned in the arguments and/or files\n listed through arguments.|file_database-->|Done for each\n individual ListerFile.|clang-->|Using libclang parse\n a file pointed inside of\n ListerFile into a AST.|extract & environment
 
-    extract-->|Extract all tests found in
-    documentation comments 
-    for functions. List extra
-    details like the filename,
-    function name, column, line,
-    etc...|extract_database
+    extract-->|Extract all tests found in\n documentation comments \n for functions. List extra\n details like the filename,\n function name, column, line,\n etc...|extract_database
 
-    environment-->|"Extract environments
-    for our main functions.
-    There are 2 environments,
-    one with everything in the
-    file (copy of the file) &
-    a environment without
-    function bodies."|environment_database
+    environment-->|"Extract environments\n for our main functions.\n There are 2 environments,\n one with everything in the\n file (copy of the file) &\n a environment without\n function bodies."|environment_database
 
-    lister-->|Try to create a list of all
-    files to be parsed for cesty test comments.
-    From recipe defined in the config that is
-    mentioned in the arguments and/or files
-    listed through arguments.|file_database-->|Done for each
-    individual ListerFile.|clang-->|Using libclang parse
-    a file pointed inside of
-    ListerFile into a AST.|extract & environment
+    environment_database & extract_database & recipe & config_database-->builder-->|Creates a new file for\n each test found in Extract for\n all ListerFile's. All files contain\n a comment at the start for a way\n to create their executable &\n the test code.|runner-->|Runs all the tests and saves\n the results.|finish
 
-    environment_database & extract_database & recipe & config_database-->builder-->|Creates a new file for
-    each test found in Extract for
-    all ListerFile's. All files contain
-    a comment at the start for a way
-    to create their executable &
-    the test code.|runner-->|Runs all the tests and saves
-    the results.|finish
+```
