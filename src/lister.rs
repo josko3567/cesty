@@ -249,14 +249,16 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
     };
 
     if arg_recipe_name.is_empty() {
-        if settings.get_warn() { warn!(
+        if settings.get_warn() 
+        && !settings.get_noconfig() { warn!(
             "Did not find a recipe!",
             "
                 No recipe was passed through cmd-line arguments.
             "
         );}
     } else if arg_recipe.is_none() {
-        if settings.get_warn() { warn!(
+        if settings.get_warn() 
+        && !settings.get_noconfig() { warn!(
             "Did not find a recipe!",
             "
                 No recipe with the name...
@@ -285,7 +287,7 @@ pub fn get_list(conf: &Config, args: &Vec<Argument>) -> Result<Vec<ListerFile>, 
             } 
             else 
             {
-                let mut confpath = PathBuf::from(&conf.path);
+                let mut confpath = PathBuf::from(conf.path.as_ref().unwrap());
 
                 // Removes .cesty.{conf,yaml,yml}
                 confpath.pop();

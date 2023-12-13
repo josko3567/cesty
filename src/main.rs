@@ -5,6 +5,7 @@ use builder::RunnableTest;
 use error::*;
 #[allow(unused_imports)]
 use colored::Colorize;
+use globals::AccessLevel;
 #[allow(unused_imports)]
 use std::path::Path;
 #[allow(unused_imports)]
@@ -97,7 +98,10 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
             
             match err {
                 config::Error::NoConfigFile(_) => {
-                    if GLOBALS.read().unwrap().get_warn() {
+                    // eprintln!("{:?}", GLOBALS.read().unwrap().get_noconfig_al());
+                    if GLOBALS.read().unwrap().get_warn() 
+                    && GLOBALS.read().unwrap().get_noconfig()
+                    && GLOBALS.read().unwrap().get_noconfig_al() == AccessLevel::Config {
                         eprintln!("{}", err)
                     }
                 }
@@ -123,6 +127,22 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
             return Err(err.code());
         }
     };
+    
+    match builder::remove_testy_path(&config) {
+        Err(err) => {
+            eprintln!("{err}");
+            return Err(err.code())
+        }
+        _ => {}
+    }
+
+    match builder::create_testy_path(&config) {
+        Err(err) => {
+            eprintln!("{err}");
+            return Err(err.code())
+        }
+        _ => {}
+    }
 
     for file in files {
 
@@ -132,10 +152,7 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
                 eprintln!("{}", err);
                 return Err(err.code());
             }
-        };
-
-        // return Ok(());
-            
+        };            
 
         let extract = Extract::from_lister(
             &file, 
@@ -153,30 +170,55 @@ pub fn cesty(argument: &Vec<String>) -> Result<(), String> {
             }
         };
 
+        // println!("--------- >>>");
+        // println!("{}", environment.full);
+        // println!("\t<<< ---------");
+        // println!("{}", environment.clean);
+
         let mut runnable_tests: Vec<RunnableTest> = vec![];
 
-        for test in extract.tests.iter() {
+        for test 
+        in extract.tests.iter() {
 
-            for extract_yaml in test.yaml.iter() {
+            for extract_yaml 
+            in test.yaml.iter() {
 
-                 match builder::build_test(
-                    recipe.clone(), 
-                    &config,
-                    &extract, 
-                    test,
-                    extract_yaml, 
-                    &environment
-                ) {
+                if extract_yaml.test.is_some() {
+                    
+                    for extract_yaml_test 
+                    in extract_yaml.test.as_ref().unwrap().iter().enumerate() {
 
-                    Ok(opt) => {
-                        match opt {
-                            Some(res) => {runnable_tests.push(res)}
-                            _ => {}
+                        let subname = 
+                            test.function.clone() 
+                            + "_#" 
+                            + extract_yaml_test.0.to_string().as_str();
+    
+                        match builder::build_test(
+                            recipe.clone(), 
+                            &config,
+                            &extract, 
+                            test,
+                            extract_yaml, 
+                            extract_yaml_test.1, 
+                            &environment,
+                            &subname
+                        ) {
+        
+                            Ok(opt) => {
+                                match opt {
+                                    Some(res) => {
+                                        runnable_tests.push(res)
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            Err(err) => {
+                                eprintln!("{}", err);
+                                return Err(err.code());
+                            }
+        
                         }
-                    }
-                    Err(err) => {
-                        eprintln!("{}", err);
-                        return Err(err.code());
+
                     }
 
                 }

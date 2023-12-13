@@ -145,7 +145,8 @@ impl Clang {
             0,
             null_mut(),
             0,
-            CXTranslationUnit_None
+            CXTranslationUnit_None 
+            | CXTranslationUnit_DetailedPreprocessingRecord
         );
 
         if translation_unit.is_null() {

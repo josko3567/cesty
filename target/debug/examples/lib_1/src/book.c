@@ -16,48 +16,55 @@
  * info:
  *     standalone: true
  *     warn: true
- *     run: true
+ *     run: false
+ * 
  * test:
- *     - name: def
+ *     - name: cool_tests__com
  *       code: |
- *         struct innerbook = my_book();
- *         if(innerbook.author == BOOK_AUTHOR
- *         && innerbook.name == BOOK_NAME
- *         && innerbook.sold_amount == BOOK_SALES ) {
+ *         struct innerbook book = my_book();
+ *         if(book.author == BOOK_AUTHOR
+ *         && book.name == BOOK_NAME
+ *         && book.sold_amount == BOOK_SALES ) {
+ *           printf("true\n");
  *           return true;
  *         }
+ *         printf("false\n");
  *         return false;
  *       expect: true
  * 
  * prerun:
  *     - echo "hello"
  * 
+ * include:
+ *     - <assert.h>
+ *     - <stdio.h>
+ * 
  * compiler:
  *   name: gcc
  *   libraries: 
- *     append: true
- *     new: -lncursesw
+ *     append: false
+ *     new: -lm
  *   flags: 
- *     append: true
+ *     append: false
  *     new: -std=c11
  * ... 
  * --->
  */
-struct innerbook my_book(int a, int b, char a[static 1])
+struct innerbook my_book()
 {
-	int foobar(int i) {
-		return i+2;
-	}
+	// int foobar(int i) {
+	// 	return i+2;
+	// }
 
-	int i = foobar(foo(bar(2)));
+	// int i = foobar(foo(bar(2)));
 	return (struct innerbook){
 		.author = BOOK_AUTHOR,
 		.name = BOOK_NAME,
-		.sold_amount = BOOK_SALES+i
+		.sold_amount = BOOK_SALES
 	};
 
 }
-`
+
 int fooishlybarful(int i) {
 
 	return 100+i;

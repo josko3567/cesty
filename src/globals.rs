@@ -143,6 +143,7 @@ pub struct Globals {
     //              Value,   Was set & by whom
     warn:           (bool,   AccessLevel),
     message_amount: (Degree, AccessLevel),
+    noconfig:       (bool,   AccessLevel),
 
 }
 
@@ -151,8 +152,8 @@ impl Default for Globals {
     fn default() -> Self {
         Globals { 
             warn:           (false,         AccessLevel::default()), 
-            message_amount: (Degree::Small, AccessLevel::default())
-            
+            message_amount: (Degree::Small, AccessLevel::default()),
+            noconfig:       (false,         AccessLevel::default()),
         }
     }
 
@@ -162,7 +163,8 @@ impl Default for Globals {
 impl Globals {
 
     // Globals.warn
-    pub fn get_warn(&self) -> bool {self.warn.0}
+    pub fn get_warn(&self) -> bool {self.warn.0.clone()}
+    pub fn get_warn_al(&self) -> AccessLevel {self.warn.1.clone()}
     pub fn set_warn(&mut self, v: bool, from: AccessLevel){
 
         if from.value() >= self.warn.1.value() {
@@ -174,11 +176,23 @@ impl Globals {
 
     // Globals.message_amount
     pub fn get_message_amount(&self) -> Degree {self.message_amount.0.clone()}
+    pub fn get_message_amount_al(&self) -> AccessLevel {self.message_amount.1.clone()}
     pub fn set_message_amount(&mut self, v: Degree, from: AccessLevel){
  
         if from.value() >= self.message_amount.1.value() {
             self.message_amount.0 = v;
             if from != AccessLevel::Overwrite {self.message_amount.1 = from}
+        }
+
+    }
+
+    pub fn get_noconfig(&self) -> bool {self.noconfig.0.clone()}
+    pub fn get_noconfig_al(&self) -> AccessLevel {self.noconfig.1.clone()}
+    pub fn set_noconfig(&mut self, v: bool, from: AccessLevel){
+ 
+        if from.value() >= self.noconfig.1.value() {
+            self.noconfig.0 = v;
+            if from != AccessLevel::Overwrite {self.noconfig.1 = from}
         }
 
     }
@@ -190,4 +204,4 @@ lazy_static!{
 }
 
 // Global constants
-const TEST_PATH: &'static str = ".cesty/testy/";
+pub const TEST_PATH: &'static str = ".cesty/testy/";

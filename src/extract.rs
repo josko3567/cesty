@@ -2,10 +2,11 @@ use crate::lister::ListerFile;
 
 use std::{
     ffi::{CStr, c_uint, OsString},
-    ptr::null_mut,
+    ptr::null_mut, sync::RwLock,
 };
 
 use clang_sys::*;
+use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_yaml;
 use indoc::formatdoc;
@@ -56,6 +57,7 @@ pub struct ExtractYAML {
     
     pub info:     Option<ExtractYAMLInfo>,
     pub prerun:   Option<Vec<String>>,
+    pub include:  Option<Vec<String>>,
     pub test:     Option<Vec<ExtractYAMLTest>>,
     pub compiler: Option<ExtractYAMLCompiler>,
 
@@ -122,6 +124,11 @@ enum CommentType {
     TripleDash
 
 }
+
+lazy_static!(
+    /// Used for serde parsing errors for a path to the file where the error occurred.
+    static ref CURRENT_FILE: RwLock<ListerFile> = RwLock::new(ListerFile::default());
+);
 
 fn parse_comment(comment: String) -> Option<Vec<ExtractYAML>> {
 
@@ -214,12 +221,24 @@ fn parse_comment(comment: String) -> Option<Vec<ExtractYAML>> {
 
     let mut yamls: Vec<ExtractYAML> = vec![];
     for c in comments {
-        eprintln!("{}", c);
+        // eprintln!("{}", c);
         let r: ExtractYAML = match serde_yaml::from_str(c.as_str()){
             Ok(res) => {res}
-            Err(err) => {warn!("", "{}", fmterr_val!(err));continue}
+            Err(err) => {
+                warn!(
+                    "Serde failed!", 
+                    "
+                        Serde was unable to parse cesty YAML found in a function comment found in file... 
+                            File: {}
+                            Error: {}
+                    ",
+                    fmterr_val!(CURRENT_FILE.read().unwrap().path.to_string_lossy()),
+                    fmterr_val!(err)
+                );
+                continue
+            }
         };
-        eprintln!("{:#?}", r);
+        // eprintln!("{:#?}", r);
         yamls.push(r);
     }
     Some(yamls)
@@ -336,6 +355,8 @@ impl Extract {
     { 
     
         stack(EOptions::New, None);
+        
+        *CURRENT_FILE.write().unwrap() = file.clone();
 
         unsafe { 
             clang_visitChildren(

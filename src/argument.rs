@@ -62,8 +62,8 @@ impl Display for Error {
                         Path passed to {}...
                             {}
                         ...was either:
-                            Not found,
-                            {} couldn't change the path due to insufficient privileges.
+                            -> Not found,
+                            -> {} couldn't change the path due to insufficient privileges.
                         Be sure that the path exists and that it's a full path.
                         Also be sure to run with {} if everything is alright.
                     ",
@@ -340,6 +340,13 @@ pub enum Argument {
         start    ="-"
     ))]
     PWD(String),
+
+    #[strum(props(
+        position ="0",
+        body     ="-noconf",
+        start    ="-"
+    ))]
+    NoConfig,
 
     // The very existence of the prop ignore makes it ignore this value
     #[strum(props(ignore="true"))]
@@ -1174,6 +1181,13 @@ impl Argument {
                     return Ok(Argument::PWD(strpath.to_owned()))
                 }
                 reterr!(Error::InvalidPWD, String::from("\"\""));              
+            }
+            Self::NoConfig => {
+                GLOBALS.write().unwrap().set_noconfig(
+                    true, 
+                    globals::AccessLevel::from_filename(filename!())
+            );
+                Ok(Argument::NoConfig)
             }
             Self::Unknown(_) => {
                 Ok(Argument::Unknown((

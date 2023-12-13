@@ -23,7 +23,8 @@ use colored::Colorize;
 pub enum Error {
     NoConfigFile(ErrorPosition),
     CannotOpenConfig(ErrorPosition, String),
-    SerdeError(ErrorPosition, String)
+    SerdeError(ErrorPosition, String),
+    CannotObtainPWD(ErrorPosition, String)
 }
 
 impl Error {
@@ -68,6 +69,15 @@ impl Display for Error {
                         {}
                 ",
                     str.bold()
+                )}
+            Self::CannotObtainPWD(pos, str) => {
+                fmtperr!(pos,
+                "Cannot obtain PWD.",
+                "
+                    Failed to obtain current PWD due to the following reason:
+                        Error: {}
+                ",
+                    str.bold().bright_blue()
                 )}
         };
         write!(f, "{message}")
@@ -126,7 +136,7 @@ pub struct ConfigRecipe {
 pub struct Config {
 
     #[serde(skip_deserializing)]
-    pub path:     OsString,
+    pub path:     Option<OsString>,
 
     pub cesty:    Option<ConfigCesty>,
     pub compiler: Option<ConfigCompiler>,
@@ -224,7 +234,7 @@ impl Config {
 
         Config {
 
-            path: OsString::from(""),
+            path: None,
             cesty: Some(configCestyEmpty),
             compiler: Some(configCompilerEmpty),
             recipe: None
@@ -289,8 +299,20 @@ impl Config {
     pub fn from_file(&mut self, file: Option<OsString>) -> Result<(), Error> {
 
         let filepure = match file {
-            Some(pure) => {pure}
-            None => {reterr!(Error::NoConfigFile)}
+            Some(res) => {
+                if GLOBALS.read().unwrap().get_noconfig() {
+                    reterr!(Error::NoConfigFile)
+                } else {
+                    res
+                }
+            }
+            None => {
+                GLOBALS.write().unwrap().set_noconfig(
+                    true, 
+                    globals::AccessLevel::from_filename(filename!())
+                );
+                reterr!(Error::NoConfigFile)
+            }
         };
 
         let stream = match File::options()
@@ -312,7 +334,7 @@ impl Config {
             Err(err) => {reterr!(Error::SerdeError, err.to_string())}
         };
 
-        self.path = filepure.to_owned();
+        self.path = Some(filepure.to_owned());
         self.set_globals();
         
         Ok(())

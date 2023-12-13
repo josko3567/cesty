@@ -1,25 +1,30 @@
 use crate::{
     error::ErrorPosition,
     filegroup::FileGroup,
-    globals::GLOBALS,
+    globals::{GLOBALS, self},
     config::Config,
-    extract::{Extract, self, ExtractYAML, Test},
-    environment::Environment, argument::Argument,
+    extract::{Extract, ExtractYAML, Test, ExtractYAMLTest},
+    environment::Environment,
 };
 
 use std::{
     fmt::Display,
-    path::Path, ffi::OsString,
+    path::{Path, PathBuf}, ffi::{OsString, OsStr}, fs,
+    fs::File, io::{ErrorKind, Write}
 };
 use rand::{distributions::Alphanumeric, Rng};
 
-use colored::Colorize;
+use colored::{Colorize, ColoredString};
 use indoc::formatdoc;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Error {
-    CannotCreateFile(ErrorPosition)
+    CannotCreateFile(ErrorPosition, String),
+    FailedFileOperation(ErrorPosition, String, String),
+    CannotObtainPWD(ErrorPosition, String),
+    CannotCreateFolders(ErrorPosition),
+    CannotRemoveFiles(ErrorPosition)
 }
 
 impl Error {
@@ -36,15 +41,57 @@ impl Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match &self {
-            Self::CannotCreateFile(pos) => {
-                if GLOBALS.read().unwrap().get_warn() { fmtpwarn!(pos,
-                "No config file was found.",
-                "
-                    Proceeding with argument passed files.
-                ")}
-                else {
-                    "".white()
-                }}
+            Self::CannotCreateFile(pos, msg) => {
+                fmtperr!(pos,
+                    "Cannot open file!",
+                    "
+                        {} failed with the following error...
+                            Error: {}
+                    ",
+                        fmterr_func!(std::fs::File::options()),
+                        msg.bright_blue().bold()
+                )}
+            Self::FailedFileOperation(pos, func, msg) => {
+                    fmtperr!(pos,
+                        "File operation failed!",
+                        "
+                            {} failed with the following error...
+                                Error: {}
+                        ",
+                            fmterr_func!(std::fs::File::options()),
+                            msg.bright_blue().bold()
+                    )}
+            Self::CannotObtainPWD(pos, err) => {
+                fmtperr!(pos,
+                    "Cannot obtain PWD!",
+                    "
+                        {} failed with this error...
+                            Error: {}
+                    ",
+                        fmterr_func!(std::env::current_dir()),
+                        err.bright_blue().bold()
+                )}
+            Self::CannotCreateFolders(pos) => {
+                fmtperr!(pos,
+                    "Cannot create test path!",
+                    "
+                        Failed to create test path...
+                            {}
+                        ...in PWD.
+                        Reason for failure is unknown.
+                    ",
+                        fmterr_val!(globals::TEST_PATH)
+                )}
+            Self::CannotRemoveFiles(pos) => {
+                fmtperr!(pos,
+                    "Cannot delete files!",
+                    "
+                        Failed to delete files in test path...
+                            {}
+                        ...due to insufficient privileges!y
+                    ",
+                        fmterr_val!(globals::TEST_PATH)
+                )}
         };
         write!(f, "{message}")
     }
@@ -58,16 +105,20 @@ impl std::error::Error for Error {}
 pub struct RunnableTest {
 
     pub name: String,
-    pub path: String,
-    pub exec: String
+    pub exec: String,
+    pub path: PathBuf,
 
 }
 
 mod picker {
 
+    use std::path::{PathBuf, Path};
+
+    use path_clean::PathClean;
+
     use crate::{
         config::Config,
-        extract::{Extract, self, ExtractYAML},
+        extract::{self, ExtractYAML, Extract},
     };
 
     pub fn prerun(
@@ -257,6 +308,48 @@ mod picker {
 
     }
 
+    pub (super) fn include_to_string(v: &Vec<String>, extract: &Extract) -> String {
+
+        let mut culmination = String::new();
+        
+        for include in v.iter() {
+
+            culmination += format!("#include {}\n", {
+                let locality = |inc: &str|{
+                    if inc.starts_with("<")
+                    && inc.ends_with(">")
+                    {
+                        return inc.to_owned()
+                    }
+                    else if inc.starts_with("\"")
+                    &&      inc.ends_with("\"")
+                    {
+                        return inc.to_owned()
+                    }
+                    else 
+                    {
+                        if PathBuf::from(inc).is_absolute() {
+                            return format!("\"{inc}\"")
+                        } else {
+                            let inc_absolute = {
+                                let mut tmp = PathBuf::from(extract.filepath.clone());
+                                tmp.pop();
+                                tmp.push(inc);
+                                tmp.clean()
+                            };
+                            return format!("\"{}\"", inc_absolute.to_string_lossy().to_string())
+                        }
+                    }
+                };
+                locality(include.trim())  
+            }).as_str()
+
+        }
+
+        culmination
+
+    }
+
 }
 
 fn matching_filename(function_name: &String) -> OsString {
@@ -279,36 +372,153 @@ fn matching_filename(function_name: &String) -> OsString {
 
 }
 
-/* HOW A FILE SHOULD LOOK
+fn get_testy_path(
 
-/// {prerun} {compiler.name} {compiler.flags} file.c -o file.out {compiler.libraries} 
-// ENVIRONMENT
-#include <stdio.h>
-...
-// MAIN
-int main(int argc, char ** argv)
+    config: &Config
+
+) -> Result<PathBuf, Error> 
 {
 
-    bool result = false;
+    let mut tmp = if config.path.is_none() {
+        match std::env::current_dir() {
+            Ok(res) => {res.to_path_buf()}
+            Err(err) => {reterr!(Error::CannotObtainPWD, err.to_string())}
+        }
+    }
+    else {
+        let mut a = PathBuf::from(config.path.as_ref().unwrap());
+        a.pop();
+        a
+    };
+    tmp.push(globals::TEST_PATH);
+    return Ok(tmp);
 
-    code...
-
-    return result ? 0 : 1;
-    or
-    return !result ? 0 : 1;
-    
 }
 
+pub fn create_testy_path(
 
-*/
+    config: &Config
+
+) -> Result<(), Error>
+{
+
+    match get_testy_path(config) {
+        Ok(testypath) => {
+            if fs::create_dir_all(&testypath).is_err() {
+                reterr!(self::Error::CannotCreateFolders)
+            } else {
+                Ok(())
+            }
+        }
+        Err(err) => {
+            Err(err)
+        }
+    }
+
+}
+
+pub fn remove_testy_path(
+
+    config: &Config
+
+) -> Result<(), Error> 
+{
+
+    match get_testy_path(config) {
+        Ok(testypath) => {
+            if fs::remove_dir_all(&testypath).is_err_and(
+                |err|{err.kind() == ErrorKind::PermissionDenied}
+            ) {
+                reterr!(self::Error::CannotRemoveFiles);
+            } else {
+                Ok(())
+            } 
+        }
+        Err(err) => {
+            Err(err)
+        }
+    }
+
+}
+
+fn build_file_contents(
+    extract:           &Extract,
+    test:              &Test,
+    extract_yaml:      &ExtractYAML,
+    extract_yaml_test: &ExtractYAMLTest,
+    environment:       &Environment
+) -> String 
+{
+
+    let test_func = "__cesty_test_".to_owned() + {let lastpart = ||{
+        if extract_yaml_test.name.is_some() {
+            if extract_yaml_test.name.as_ref().unwrap().contains(
+                |c: char|{
+                    if c.is_alphanumeric() || c == '_' {false} else {true}
+                }
+            ) {
+                "noname"
+            } else {
+                extract_yaml_test.name.as_ref().unwrap().as_str()
+            }
+        } else {
+            "noname"
+        }
+    }; lastpart()};
+
+    let used_env = if extract_yaml.info.as_ref().is_some_and(
+        |info| {info.standalone.is_some_and(
+            |standalone| standalone == true
+        )}
+    ) {
+        &environment.full
+    } else {
+        &environment.clean
+    };
+
+    let ret_main = if extract_yaml_test.expect == true {
+        format!("return {test_func}(argc, argv) ? 0 : 1;")
+    } else {
+        format!("return {test_func}(argc, argv) ? 1 : 0;")
+    };
+    
+    let cesty_inc = if extract_yaml.include.is_some() {
+        picker::include_to_string(&extract_yaml.include.as_ref().unwrap(), extract)
+    } else {
+        String::new()
+    };
+
+
+    return formatdoc!("
+        // #! CESTY INCLUSIONS.
+        #include <stdbool.h>
+        {cesty_inc}
+        // #! FILE ENVIRONMENT
+        {used_env}
+        // #! CESTY TEST FUNCTION
+        bool {test_func}(int argc, char ** argv) {{
+            {}
+        }}
+        // #! CESTY MAIN FUNCTION
+        int main(int argc, char ** argv) {{
+            {ret_main}
+        }}        
+    ",
+        extract_yaml_test.code.replace("\n", "\n\t").trim_end()
+    );
+
+}
+
 pub fn build_test(
 
-    recipe:       Option<String>,
-    config:       &Config,
-    extract:      &Extract,
-    test:         &Test,
-    extract_yaml: &ExtractYAML,
-    environment:  &Environment,
+    recipe:            Option<String>,
+    config:            &Config,
+    extract:           &Extract,
+    test:              &Test,
+    extract_yaml:      &ExtractYAML,
+    extract_yaml_test: &ExtractYAMLTest,
+    environment:       &Environment,
+    subname:           &String
 
 ) -> Result<Option<RunnableTest>, Error>
 {
@@ -331,34 +541,100 @@ pub fn build_test(
         return Ok(None)
     }
 
-    let mut runtest: RunnableTest = RunnableTest::default();
+    // let mut runtest: RunnableTest = RunnableTest::default();
     
-    runtest.exec = picker::prerun(recipe, config, extract_yaml);
+    let prerun = picker::prerun(recipe, config, extract_yaml);
 
     let compiler_name:      String = picker::compiler_name(config, extract_yaml);
     let compiler_flags:     String = picker::compiler_flags(config, extract_yaml);
     let compiler_libraries: String = picker::compiler_libraries(config, extract_yaml);
     
-    let filename = matching_filename(&test.function).to_string_lossy().to_string();
+    let filename = Path::new(&matching_filename(&test.function)).to_owned();
 
-    let fullpath = std::env::current_dir().unwrap().as_path();
+    let testypath = match get_testy_path(config) {
+        Ok(res) => {res}
+        Err(err) => {return Err(err)}
+    };
+
+    let cfile  = {
+        let mut tmp = testypath.clone(); 
+        tmp.push(&filename);
+        tmp.set_extension("c"); 
+        tmp
+    };
     
+    let exfile = {
+        let mut tmp = testypath.clone(); 
+        tmp.push(&filename);
+        tmp.set_extension({
+            let ext = ||{
+                if std::env::consts::OS == "windows" {
+                    OsStr::new("exe")
+                } else {
+                    OsStr::new("out")
+                }};
+            ext()
+        }); 
+        tmp
+    };
 
-    println!("{}{} {} {}.c -o {}.out {}", 
-        runtest.exec, 
+    let mut stream = match File::options()
+        .create_new(true)
+        .write(true)
+        .read(false)
+        .truncate(true)
+        .open(&cfile)
+    {
+        Ok(file) => {file}
+        Err(err) => {
+            reterr!(
+                self::Error::CannotCreateFile, 
+                err.to_string()
+            )
+        }
+    };
+
+    match stream.write_all(
+        build_file_contents(
+            extract, 
+            test, 
+            extract_yaml, 
+            extract_yaml_test, 
+            environment
+        ).as_bytes()
+    )
+    {
+        Ok(_) => {}
+        Err(err) => {
+            reterr!(
+                self::Error::FailedFileOperation, 
+                fmterr_func!(stream.write_all(build_file_contents())),
+                err.to_string()
+            )
+        }
+    }
+
+    let testname = if extract_yaml_test.name.is_some() {
+        extract_yaml_test.name.as_ref().unwrap().to_owned()
+    } else {
+        subname.to_owned()                
+    };
+
+    let exec = format!("{}{} {} {:?} -o {:?} {}", 
+        prerun, 
         compiler_name,
         compiler_flags,
-        &filename,
-        &filename,
+        cfile,
+        exfile,
         compiler_libraries
     );
 
-
-    // let compiler_flags: String = picker
-
-        // Compiler flags
-    // let mut compiler_flags
-
-    Ok(Some(runtest))
-
+    Ok(Some(
+        RunnableTest {
+            name: testname,
+            path: exfile,
+            exec: exec
+        }
+    ))
+    
 }
