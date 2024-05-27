@@ -1,0 +1,13 @@
+[compiler]
+name = "gcc"
+flags = ["-std=c11", "-Wall"]
+libraries = ["-lm"]
+
+[[recipes]]
+name = "all"
+force = true
+prerun = ["make", "meson", "ninja"]
+
+[[recipes.parse]]
+path = "./a"
+recurse = true

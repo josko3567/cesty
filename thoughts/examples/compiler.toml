@@ -1,0 +1,6 @@
+[compiler.append]
+flags = ["-c ./bussi"]
+
+
+[compiler.replace]
+flags = [{old = "--std=*", new = "--std=c99"}]

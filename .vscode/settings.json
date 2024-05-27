@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "typeinfo": "c",
+        "stdio.h": "c",
+        "stdint.h": "c",
+        "complex.h": "c",
+        "floatn.h": "c"
+    }
+}

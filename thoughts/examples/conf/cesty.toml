@@ -1,0 +1,51 @@
+warn = true
+
+[compiler]
+name = "clang"
+flags = """
+  -std=c11
+  -Wall
+  -Wextra
+  -Wpedantic
+  -Wformat=2
+  -Wno-unused-parameter
+  -Wshadow
+  -Wwrite-strings
+  -Wstrict-prototypes
+  -Wold-style-definition
+  -Wredundant-decls
+  -Wnested-externs
+  -Wmissing-include-dirs
+  -pipe
+  -Wno-unused-command-line-argumen
+"""
+libraries = """
+  -lncursesw
+"""
+
+[[recipe]]
+name = "src"
+prerun = ["make -C /.../"]
+force = false
+
+  [recipe.compiler]
+  name = "gcc"
+
+    [recipe.compiler.flags]
+    append = "-std=c11"
+    remove = "-std=*"
+
+    [recipe.compiler.libraries]
+    append = "-lm"
+    remove = "-lncursesw"
+
+  [[recipe.run]]
+  path = "/home/josko-k/nonstd/asigraph/src/agcont.c"
+
+[[recipe]]
+name = "all"
+force = true
+
+  [[recipe.run]]
+  path = "examples/lib_1/*.c"
+  recurse = true
