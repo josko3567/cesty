@@ -10,18 +10,120 @@
 //! the filter for [clang_sys::clang_visitChildren] & other
 //! functions used inside of it.
 
-use std::path::PathBuf;
+use std::{ffi::OsString, path::PathBuf};
 
 use crate::{
     error::{
         debuginfo, debugpush, error, 
         Alert, AlertInfo
-    }, rustclang::{
+    }, 
+    rustclang::{
         Clang, Open
     }
 };
 
-use super::ParsedFile;
+
+/// Function name & return type.
+#[derive(Clone, Debug, Default)]
+pub struct Function {
+
+    /// Return type in string. Might be removed due to
+    /// redundancy.
+    pub returns: String,
+
+    /// Full function name (with *cesty_*)
+    pub name: String,
+
+    /// Part of the full name (without the *cesty_*)
+    /// 
+    /// For normal function names like *main* this is empty.
+    pub name_slice: String,
+
+    /// Arguments that the function accepts. 
+    pub args: Vec<String>
+
+}
+
+/// Ranges for certain parts of a function.
+#[derive(Clone, Debug, Default)]
+pub struct Range {
+    
+    /// Range of the function template.
+    pub template: (usize, usize),
+
+    /// Range of the function body (from **{** to **}**).
+    pub body: (usize, usize)
+
+}
+
+/// Everything useful that is extracted from a test function.
+#[derive(Clone, Debug, Default)]
+pub struct ParsedTest {
+
+    /// Parsed from the function docs.
+    pub config:   super::Config,
+
+    /// Function template data.
+    pub function: Function,
+
+    /// Ranges of certain function parts.
+    pub range:    Range
+
+}
+
+/// Contains the environment the test will be placed in.
+#[derive(Clone, Debug, Default)]
+pub struct Environment {
+
+    /// Full file.
+    pub full:      String,
+
+    /// Full file without main().
+    pub mainless:  String,
+
+    /// File without all the function bodies & main().
+    pub templated: String
+
+}
+
+/// Parsed file test data.
+#[derive(Clone, Debug, Default)]
+pub struct ParsedFile {
+
+    /// File path with filename.
+    pub path: PathBuf,
+
+    /// File stem.
+    pub stem: OsString,
+
+    /// List of all tests found inside of the file.
+    pub test: Vec<ParsedTest>,
+
+    /// The files full & clean environment.
+    pub environment: Environment,
+
+    /// Main function.
+    pub main: Option<ParsedTest>
+
+}
+
+impl ParsedTest {
+
+    /// Test file stem used for debuging.
+    #[allow(dead_code)]
+    pub fn get_test_file_stem(
+        &self, 
+        parsed_file: &ParsedFile
+    ) -> OsString {
+
+        let mut stem = parsed_file.stem.clone();
+        stem.push(OsString::from("_").as_os_str());
+        stem.push(self.function.name_slice.clone());
+        stem
+
+    }
+
+}
 
 pub fn extract(
     path: PathBuf
@@ -71,20 +173,24 @@ pub mod visitor {
     };
     use clang_sys as libclang;
     use strum::{EnumProperty, IntoEnumIterator};
-    use crate::error::function_message;
-    use crate::rustclang::{self, cxstring_to_string_consumable, filename_from_cursor};
     use crate::{
-        rustclang::Clang, 
+        rustclang::{
+            Clang, self, 
+            cxstring_to_string_consumable, 
+            filename_from_cursor 
+        },
         defaults::DEFAULT_FUNCTION_PREFIX, 
         error::{
             debugappend, debuginfo, 
             debugpush, error, 
             warning, Alert, AlertCode, 
             AlertCodeFix, AlertExample, 
-            AlertInfo
-        }
+            AlertInfo, function_message
+        },
+        test::Config
     };
-    use crate::test::{Config, Environment, ParsedTest};
+
+    use super::{Environment, ParsedTest};
 
     #[derive(
         strum_macros::EnumProperty, 
@@ -945,14 +1051,14 @@ pub mod visitor {
                     accumulated
                 };
 
-                let function = crate::test::Function {
+                let function = super::Function {
                     returns,
                     args,
                     name: full_function_name,
                     name_slice: full_cesty_name,
                 };
 
-                let range = crate::test::Range {
+                let range = super::Range {
                     body: body_range,
                     template: template_range
                 };
@@ -982,7 +1088,7 @@ pub mod visitor {
                     None => Config::default()
                 };
 
-                let test = crate::test::ParsedTest {
+                let test = super::ParsedTest {
                     config,
                     function,
                     range

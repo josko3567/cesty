@@ -1,4 +1,11 @@
 //! Argument and config parsing.
+//! 
+//! Note that when [Config::parse_cli_and_file] finishes it sets up
+//! some enviornment variables (current working directory) for cesty to run
+//! correctly.
+//! 
+//! Specificaly it sets up [std::env::current_dir] to point to the directory 
+//! where the config was found.
 
 use clap::{
     Parser, Args,
@@ -158,6 +165,8 @@ pub struct Run {
     #[arg(short = 'C', long = "config")]
     #[serde(skip)]
     /// Use a different config name, or specify its full/relative path.
+    /// This gets written to by either `--config ...` or the config found
+    /// by [`find_config`].
     pub config_path: Option<PathBuf>,
 
     #[command(flatten)]
@@ -223,7 +232,25 @@ pub enum Commands {
 
 }
 
-
+impl Run {
+    
+    fn extract_recipe(&self) -> Option<&Recipe> {
+        
+        if self.recipe_name == None {return None}
+        let recipe_name = self.recipe_name.clone().unwrap();
+        
+        for recipe in self.recipes.iter() {
+            
+            if recipe.name == recipe_name {
+                return Some(recipe)
+            }
+            
+        }
+        None
+        
+    }
+    
+}
 
 /// Attempt to find a config in the current pwd or any of 
 /// the lower level directories.
@@ -255,9 +282,39 @@ pub enum Commands {
 /// No Matched Files
 /// ----------------
 /// If no file is matched, a [`Ok()`] containing a [`None`] is returned.
-pub(super) fn find_config(recursive: bool) -> Result<(Option<PathBuf>, Vec<Alert>), Alert> {
-
+pub(super) fn find_config(config_path: Option<PathBuf>, recursive: bool) -> Result<(Option<PathBuf>, Vec<Alert>), Alert> {
+    
     let mut warnings: Vec<Alert> = vec![];
+    
+    if config_path.is_some() {
+        
+        let config = config_path.unwrap();
+        if !config.exists() {
+            return error!{
+                description: "CLI passed config file does not exist.".to_owned(),
+                debug: debuginfo!(),
+                example: None,
+                note: vec![
+                    format!("config file '{}' does not exist.", config.to_string_lossy())
+                ]
+            }
+        }
+        
+        let canonical_config = match config.canonicalize() {
+            Ok(canonical_config) => canonical_config,
+            Err(err) => {
+                return error!{
+                    debug: debuginfo!(),
+                    description: "could not convert path to a canonical path.".to_owned(),
+                    example: None,
+                    note: function_message!("std::env::current_dir()", err.to_string())
+                }
+            }
+        };
+        
+        return Ok((Some(canonical_config), warnings))
+        
+    }
     
     let extensions = match ConfigLanguage::get_all_extensions() {
 
@@ -530,7 +587,7 @@ impl Run {
         self.cleanup()?;
         self.apply_pre_config_options()?;
 
-        let schrodinger_path = match find_config(true) {
+        let schrodinger_path = match find_config(self.config_path, true) {
             Ok(mut path_and_warnings) => {
                 warnings.append(&mut path_and_warnings.1);
                 self.config_path = path_and_warnings.0.clone();
@@ -540,7 +597,22 @@ impl Run {
         };
 
         let config_path = match schrodinger_path {
-            Some(path) => path,
+            Some(path) => {
+                let mut config_directory = path.clone();
+                config_directory.pop();
+                match env::set_current_dir(config_directory) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        return error!{
+                            debug: debuginfo!(),
+                            description: format!("unable to change the pwd into `{}`", self.directory.as_ref().unwrap().to_string_lossy().to_string()),
+                            example: None,
+                            note: function_message!("std::env::set_current_dir()", err.to_string())
+                        }
+                    }
+                }
+                path
+            },
             None =>  {
                 if self.no_config == false {
                     warnings.push( warning!{

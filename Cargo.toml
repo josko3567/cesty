@@ -18,3 +18,6 @@ path-clean   = "1.0.1"
 strum        = "0.26.2"
 strum_macros = "0.26.2"
 clang-sys    = {version = "1.7.0", features = ["clang_16_0"]}
+time         = { version = "0.3.17", features = ["local-offset", "formatting", "macros"] }
+rand         = "0.8.5"
+indoc = "2.0.5"

@@ -34,7 +34,10 @@ pub const DEFAULT_FUNCTION_PREFIX: &'static str = "cesty_";
 
 /// Name of the default compiler when no compiler
 /// is specified.
-pub const _DEFAULT_COMPILER_NAME: &'static str = "gcc";
+pub const DEFAULT_COMPILER_NAME: &'static str = "gcc";
+
+/// Amount of attempts at creating a unique directory name
+pub const MAX_BATCH_ROOT_NAME_CREATION_ATTEMPTS: usize = 10;
 
 /// Returns maximum depth globwalker is meant to search.
 /// 

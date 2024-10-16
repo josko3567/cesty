@@ -1,15 +1,22 @@
-use std::{ffi::OsString, path::PathBuf};
+//! Module for extracting, compiling and running tests
+//! from files returned by lister.
+//! 
+//! # Use 
+//! * [`extract`] - Used to extract tests, environments for tests
+//!                 and 
+
+pub mod extract;
+pub mod compilable;
 
 use serde::Deserialize;
 use crate::{
     arg_conf::serde_tokenize_strings_and_vec, 
     error::{
-        debuginfo, error, Alert, AlertCode, AlertCodeFix, AlertExample, AlertInfo
+        debuginfo, error, Alert, 
+        AlertCode, AlertCodeFix, 
+        AlertExample, AlertInfo
     }
 };
-
-pub mod extract;
-pub mod compilable;
 
 /// Appends `flags` & `libraries` for test compilation/linking.
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -141,118 +148,6 @@ pub struct Config {
     /// Commands to run before the test.
     #[serde(default = "Vec::new")]
     pub commands: Vec<String>
-
-}
-
-
-/// Function name & return type.
-#[derive(Clone, Debug, Default)]
-pub struct Function {
-
-    /// Return type in string. Might be removed due to
-    /// redundancy.
-    pub returns: String,
-
-    /// Full function name (with *cesty_*)
-    pub name: String,
-
-    /// Part of the full name (without the *cesty_*)
-    /// 
-    /// For normal function names like *main* this is empty.
-    pub name_slice: String,
-
-    /// Arguments that the function accepts. 
-    pub args: Vec<String>
-
-}
-
-/// Ranges for certain parts of a function.
-#[derive(Clone, Debug, Default)]
-pub struct Range {
-    
-    /// Range of the function template.
-    pub template: (usize, usize),
-
-    /// Range of the function body (from **{** to **}**).
-    pub body: (usize, usize)
-
-}
-
-/// Everything useful that is extracted from a test function.
-#[derive(Clone, Debug, Default)]
-pub struct ParsedTest {
-
-    /// Parsed from the function docs.
-    pub config:   Config,
-
-    /// Function template data.
-    pub function: Function,
-
-    /// Ranges of certain function parts.
-    pub range:    Range
-
-}
-
-/// Contains the environment the test will be placed in.
-#[derive(Clone, Debug, Default)]
-pub struct Environment {
-
-    /// Full file.
-    pub full:      String,
-
-    /// Full file without main().
-    pub mainless:  String,
-
-    /// File without all the function bodies & main().
-    pub templated: String
-
-}
-
-/// Parsed file test data.
-#[derive(Clone, Debug, Default)]
-pub struct ParsedFile {
-
-    /// File path with filename.
-    pub path: PathBuf,
-
-    /// File stem.
-    pub stem: OsString,
-
-    /// List of all tests found inside of the file.
-    pub test: Vec<ParsedTest>,
-
-    /// The files full & clean environment.
-    pub environment: Environment,
-
-    /// Main function.
-    pub main: Option<ParsedTest>
-
-}
-
-struct CompilableTestFile {
-
-    pub path:   PathBuf,
-
-    pub config: Config,
-    pub name:   String
-
-}
-
-
-
-impl ParsedTest {
-
-    pub fn get_test_file_stem(
-        &self, 
-        parsed_file: &ParsedFile
-    ) -> OsString {
-
-        let mut stem = parsed_file.stem.clone();
-        stem.push(OsString::from("_").as_os_str());
-        stem.push(self.function.name_slice.clone());
-        stem
-
-    }
 
 }
 

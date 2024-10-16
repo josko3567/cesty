@@ -59,7 +59,7 @@ pub fn cesty(conf: arg_conf::Config) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     };
-
+    
     let (list, _recipe) = match lister::list(&run_conf) {
         Ok(((list, recipe), warnings)) => {
             for warning in warnings {eprintln!("{warning}")}
@@ -96,15 +96,22 @@ pub fn cesty(conf: arg_conf::Config) -> Result<(), Box<dyn std::error::Error>> {
         if parsed_file.test.is_empty() == true {
             continue
         }
-
+        
+        
         println!("Found test inside of {:?}", &parsed_file.path);
+
+        println!("{:#?}", parsed_file);
+        
+        test::compilable::CompilableTest::from_parsed_file(parsed_file, &run_conf);
 
         // for test in parsed_file.test.iter() {
         //     println!("{:?}", test.get_test_file_stem(&parsed_file));
         //     println!("{:#?}", test);
         // }
 
-        println!("{:#?}", parsed_file);
+        // println!("{:#?}",test::compilable::CompiledFolderLock::new(&run_conf));
+
+        // println!("{:#?}", parsed_file);
 
 
     }
@@ -168,7 +175,7 @@ mod tests {
     #[test]
     fn find_config_test() {
 
-        println!("{:#?}", crate::arg_conf::find_config(true));
+        // println!("{:#?}", crate::arg_conf::find_config(true));
 
     }
 }

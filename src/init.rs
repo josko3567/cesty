@@ -138,7 +138,7 @@ pub fn init(init_conf: ConfigLanguage) -> Result<Vec<Alert>, Alert> {
         Err(err) => return Err(debugpush!(err))
     };
 
-    match find_config(false) {
+    match find_config(None, false) {
         Ok(schrodingers_config) => match schrodingers_config.0 {
             Some(path) => {
                 if path.is_file() 
@@ -248,7 +248,7 @@ pub fn init(init_conf: ConfigLanguage) -> Result<Vec<Alert>, Alert> {
                 Ok(res) => res,
                 Err(err) => return error!{
                     debug: debuginfo!(),
-                    description: "failed to convert from a structure to YAML".to_owned(),
+                    description: "failed to convert from a structure to TOML".to_owned(),
                     example: None,
                     note: function_message!("toml::to_string()", err.to_string())
                 }
